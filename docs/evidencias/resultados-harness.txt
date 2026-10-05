@@ -1,0 +1,29 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> catalogo-ti-backend@0.2.0 test:embedded
+> node --test tests/embedded.test.cjs
+
+Cuenta creada: admin
+Cuenta creada: consulta
+Cuenta existente conservada: admin
+Cuenta existente conservada: consulta
+▶ Harness aislado: NestJS real y PostgreSQL embebido PGlite
+  ✔ Seed demo reproducible: dos roles, hashes y sin duplicados (1636.632914ms)
+  ✔ Hash con sal distinta, verificación y límite de 72 bytes (887.622031ms)
+  ✔ P01: login por usuario/correo y credenciales inválidas (960.177826ms)
+  ✔ P02: sin token, firma alterada, expiración y usuario desactivado (18.510186ms)
+  ✔ P03: consulta lee, escritura administrativa rechazada (26.76997ms)
+  ✔ P02: logout revoca JWT y bloquea su reutilización (9.467548ms)
+  ✔ P04 parcial: jerarquía completa recuperable en DB (6.986233ms)
+  ✔ P05 parcial: unicidad y FK rechazadas en DB (2.214803ms)
+  ✔ P09 parcial: umbrales inválidos rechazados y NULL conservado (1.730111ms)
+  ✔ P11 parcial: responsabilidad y traslados coherentes en DB (4.907707ms)
+✔ Harness aislado: NestJS real y PostgreSQL embebido PGlite (4821.276416ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5154.054638

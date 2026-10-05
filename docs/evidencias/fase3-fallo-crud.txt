@@ -1,0 +1,83 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> catalogo-ti-backend@0.3.0 test:embedded
+> node --test tests/embedded.test.cjs
+
+Cuenta existente conservada: admin
+Cuenta existente conservada: consulta
+Cuenta existente conservada: admin
+Cuenta existente conservada: consulta
+▶ Integración: NestJS, TypeORM y PostgreSQL embebido; archivo original
+  ✔ Seed demo reproducible: dos roles, hashes y sin duplicados (2253.322854ms)
+  ✔ Hash con sal distinta, verificación y límite de 72 bytes (1773.053296ms)
+  ✔ P01: login por usuario/correo y credenciales inválidas (2616.956033ms)
+  ✔ P02: sin token, firma alterada, expiración y usuario desactivado (34.410031ms)
+  ✔ P03: consulta lee, escritura administrativa rechazada (38.5666ms)
+  ✔ P02: logout revoca JWT y bloquea su reutilización (20.700572ms)
+  ✔ P04 parcial: jerarquía completa recuperable en DB (20.008093ms)
+  ✔ P05 parcial: unicidad y FK rechazadas en DB (4.814021ms)
+  ✔ P09 parcial: umbrales inválidos rechazados y NULL conservado (3.272855ms)
+  ✔ P11 parcial: responsabilidad y traslados coherentes en DB (22.73364ms)
+  ✔ P03: consulta rechazada en CRUD e importación reales; hashes no expuestos (62.779399ms)
+  ✖ P04/P05: jerarquía por API, duplicados, FK, actualización y bajas protegidas (82.184712ms)
+  ✔ P09: crear y editar umbrales, NULL y sección obligatoria (158.63234ms)
+  ✔ P10: búsqueda, filtros, paginación y ficha completa (72.35459ms)
+  ✖ P11: usuario ajeno rechazado; asignación, traslado y baja protegidos (51.716299ms)
+  ✔ P06: original, 12/46, hash y auditoría completa (908.122319ms)
+  ✔ P07: repetir sin duplicar ni actualizar, trazabilidad (469.797016ms)
+  ✔ P08: SE.12 canónico, dos nombres, prefijo y NULL reales (19.368737ms)
+  ✔ P10: filtros de clase, criticidad, tipo, estado y nivel1 (40.682175ms)
+  ✔ Reimportación conserva correcciones manuales y responsables (452.380772ms)
+✖ Integración: NestJS, TypeORM y PostgreSQL embebido; archivo original (14500.535659ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 18
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15756.768685
+
+✖ failing tests:
+
+test at tests/backend-harness.cjs:15:11
+✖ P04/P05: jerarquía por API, duplicados, FK, actualización y bajas protegidas (82.184712ms)
+  AssertionError [ERR_ASSERTION]: {"statusCode":400,"message":"Falta un campo obligatorio."}
+  
+  400 !== 201
+  
+      at TestContext.<anonymous> (/workspace/scratch/0a1e4ff1b3bb/catalogo-fase3/backend/tests/backend-harness.cjs:16:245)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async exports.runBackendHarness (/workspace/scratch/0a1e4ff1b3bb/catalogo-fase3/backend/tests/backend-harness.cjs:15:3)
+      at async TestContext.<anonymous> (/workspace/scratch/0a1e4ff1b3bb/catalogo-fase3/backend/tests/embedded.test.cjs:11:31)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 400,
+    expected: 201,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests/backend-harness.cjs:32:11
+✖ P11: usuario ajeno rechazado; asignación, traslado y baja protegidos (51.716299ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  200 !== 400
+  
+      at TestContext.<anonymous> (/workspace/scratch/0a1e4ff1b3bb/catalogo-fase3/backend/tests/backend-harness.cjs:33:11)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async exports.runBackendHarness (/workspace/scratch/0a1e4ff1b3bb/catalogo-fase3/backend/tests/backend-harness.cjs:32:3)
+      at async TestContext.<anonymous> (/workspace/scratch/0a1e4ff1b3bb/catalogo-fase3/backend/tests/embedded.test.cjs:11:31)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 200,
+    expected: 400,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

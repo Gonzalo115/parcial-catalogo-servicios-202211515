@@ -1,0 +1,14 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> catalogo-ti-frontend@0.3.0 build
+> vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 29 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.38 kB │ gzip:  0.27 kB
+dist/assets/index-RU6xqQCi.css    2.12 kB │ gzip:  0.95 kB
+dist/assets/index-CCRt8pbp.js   198.69 kB │ gzip: 62.66 kB
+✓ built in 5m 5s

@@ -1,0 +1,347 @@
+{
+  "fecha": "2026-10-04",
+  "sha256": "de3b478a5faeeeaebce1aa7726e0e3321188a68e41bbb656e1d17b0c5b74dcf0",
+  "control": {
+    "nivel1": 12,
+    "nivel2": 46
+  },
+  "canonico_SE12": {
+    "codigo": "SE.12",
+    "nombre": "Suministrar Analitica",
+    "filas": [
+      99,
+      100
+    ],
+    "nombres": [
+      {
+        "fila": 99,
+        "nombre": "Suministrar Analitica"
+      },
+      {
+        "fila": 100,
+        "nombre": "Mantener Tableros de Control"
+      }
+    ],
+    "requiere_revision": true
+  },
+  "servicios_SE12": [
+    {
+      "codigo": "SE.12.1",
+      "codigo_n1": "SE.12",
+      "nombre_n1": "Suministrar Analitica",
+      "nombre_n2": "Suministrar Tableros de Control",
+      "activo": null,
+      "clase": null,
+      "criticidad": null,
+      "tipo": null,
+      "descripcion": null,
+      "metrica": null,
+      "minimo": null,
+      "maximo": null,
+      "requiere_revision": true
+    },
+    {
+      "codigo": "SE.12.2",
+      "codigo_n1": "SE.12",
+      "nombre_n1": "Mantener Tableros de Control",
+      "nombre_n2": "Suministrar Análsis de Información",
+      "activo": null,
+      "clase": null,
+      "criticidad": null,
+      "tipo": null,
+      "descripcion": null,
+      "metrica": null,
+      "minimo": null,
+      "maximo": null,
+      "requiere_revision": true
+    },
+    {
+      "codigo": "SE.12.3",
+      "codigo_n1": "SE.12",
+      "nombre_n1": null,
+      "nombre_n2": "Mantener Tableros de Control",
+      "activo": null,
+      "clase": null,
+      "criticidad": null,
+      "tipo": null,
+      "descripcion": null,
+      "metrica": null,
+      "minimo": null,
+      "maximo": null,
+      "requiere_revision": true
+    }
+  ],
+  "omitidos": [
+    {
+      "fila": 42,
+      "original": {
+        "codigo_n1": null,
+        "nombre_n1": null,
+        "codigo_n2": null,
+        "nombre_n2": null,
+        "activo": "S",
+        "clase": "RECURRENTE",
+        "criticidad": "Normal",
+        "tipo": "Front End",
+        "descripcion": null,
+        "metrica": null,
+        "minimo": null,
+        "maximo": null
+      },
+      "resuelto": {
+        "codigo_n1": "SE.06",
+        "nombre_n1": "Administrar Aplicaciones",
+        "codigo_n2": null,
+        "nombre_n2": null,
+        "activo": "S",
+        "clase": "RECURRENTE",
+        "criticidad": "Normal",
+        "tipo": "Front End",
+        "descripcion": null,
+        "metrica": null,
+        "minimo": null,
+        "maximo": null
+      },
+      "origen": {
+        "codigo_n1": {
+          "celda": "A42",
+          "principal": "A26",
+          "combinada": true
+        },
+        "nombre_n1": {
+          "celda": "B42",
+          "principal": "B26",
+          "combinada": true
+        },
+        "codigo_n2": {
+          "celda": "C42",
+          "principal": "C42",
+          "combinada": false
+        },
+        "nombre_n2": {
+          "celda": "D42",
+          "principal": "D42",
+          "combinada": false
+        },
+        "activo": {
+          "celda": "E42",
+          "principal": "E42",
+          "combinada": false
+        },
+        "clase": {
+          "celda": "F42",
+          "principal": "F42",
+          "combinada": false
+        },
+        "criticidad": {
+          "celda": "G42",
+          "principal": "G42",
+          "combinada": false
+        },
+        "tipo": {
+          "celda": "H42",
+          "principal": "H42",
+          "combinada": false
+        },
+        "descripcion": {
+          "celda": "I42",
+          "principal": "I42",
+          "combinada": false
+        },
+        "metrica": {
+          "celda": "J42",
+          "principal": "J42",
+          "combinada": false
+        },
+        "minimo": {
+          "celda": "K42",
+          "principal": "K42",
+          "combinada": false
+        },
+        "maximo": {
+          "celda": "L42",
+          "principal": "L42",
+          "combinada": false
+        }
+      }
+    },
+    {
+      "fila": 67,
+      "original": {
+        "codigo_n1": null,
+        "nombre_n1": null,
+        "codigo_n2": null,
+        "nombre_n2": null,
+        "activo": "S",
+        "clase": "A DEMANDA",
+        "criticidad": "Normal",
+        "tipo": "Front End",
+        "descripcion": null,
+        "metrica": null,
+        "minimo": null,
+        "maximo": null
+      },
+      "resuelto": {
+        "codigo_n1": "SE.09",
+        "nombre_n1": "Aprovisionar Equipo",
+        "codigo_n2": null,
+        "nombre_n2": null,
+        "activo": "S",
+        "clase": "A DEMANDA",
+        "criticidad": "Normal",
+        "tipo": "Front End",
+        "descripcion": null,
+        "metrica": null,
+        "minimo": null,
+        "maximo": null
+      },
+      "origen": {
+        "codigo_n1": {
+          "celda": "A67",
+          "principal": "A63",
+          "combinada": true
+        },
+        "nombre_n1": {
+          "celda": "B67",
+          "principal": "B63",
+          "combinada": true
+        },
+        "codigo_n2": {
+          "celda": "C67",
+          "principal": "C67",
+          "combinada": false
+        },
+        "nombre_n2": {
+          "celda": "D67",
+          "principal": "D67",
+          "combinada": false
+        },
+        "activo": {
+          "celda": "E67",
+          "principal": "E67",
+          "combinada": false
+        },
+        "clase": {
+          "celda": "F67",
+          "principal": "F67",
+          "combinada": false
+        },
+        "criticidad": {
+          "celda": "G67",
+          "principal": "G67",
+          "combinada": false
+        },
+        "tipo": {
+          "celda": "H67",
+          "principal": "H67",
+          "combinada": false
+        },
+        "descripcion": {
+          "celda": "I67",
+          "principal": "I67",
+          "combinada": false
+        },
+        "metrica": {
+          "celda": "J67",
+          "principal": "J67",
+          "combinada": false
+        },
+        "minimo": {
+          "celda": "K67",
+          "principal": "K67",
+          "combinada": false
+        },
+        "maximo": {
+          "celda": "L67",
+          "principal": "L67",
+          "combinada": false
+        }
+      }
+    }
+  ],
+  "observaciones": [
+    {
+      "tipo": "fila_sin_codigo_n2",
+      "fila": 42,
+      "regla": "No completar fuera de un rango combinado."
+    },
+    {
+      "tipo": "fila_sin_codigo_n2",
+      "fila": 67,
+      "regla": "No completar fuera de un rango combinado."
+    },
+    {
+      "tipo": "conflicto_nombre_nivel1",
+      "codigo": "SE.12",
+      "canonico": "Suministrar Analitica",
+      "evidencia": [
+        {
+          "fila": 99,
+          "nombre": "Suministrar Analitica"
+        },
+        {
+          "fila": 100,
+          "nombre": "Mantener Tableros de Control"
+        }
+      ],
+      "regla": "Primer nombre no vacío por orden de fila; se conserva evidencia."
+    },
+    {
+      "tipo": "padre_por_prefijo",
+      "fila": 101,
+      "codigo": "SE.12.3",
+      "padre": "SE.12"
+    },
+    {
+      "tipo": "revision_requerida",
+      "codigo": "SE.12.1",
+      "filas": [
+        99
+      ],
+      "ausentes": [
+        "activo",
+        "clase",
+        "criticidad",
+        "tipo",
+        "descripcion",
+        "metrica",
+        "minimo",
+        "maximo"
+      ]
+    },
+    {
+      "tipo": "revision_requerida",
+      "codigo": "SE.12.2",
+      "filas": [
+        100
+      ],
+      "ausentes": [
+        "activo",
+        "clase",
+        "criticidad",
+        "tipo",
+        "descripcion",
+        "metrica",
+        "minimo",
+        "maximo"
+      ]
+    },
+    {
+      "tipo": "revision_requerida",
+      "codigo": "SE.12.3",
+      "filas": [
+        101
+      ],
+      "ausentes": [
+        "activo",
+        "clase",
+        "criticidad",
+        "tipo",
+        "descripcion",
+        "metrica",
+        "minimo",
+        "maximo"
+      ]
+    }
+  ]
+}
