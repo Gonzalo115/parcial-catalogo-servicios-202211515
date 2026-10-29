@@ -4,7 +4,7 @@
 
 Desarrollar una aplicación web para gestionar el catálogo de servicios de TI
 de CatalogoServicios.xlsx, con PostgreSQL, organización y autenticación local.
-Este contexto corresponde a la Fase 3: Backend, CRUD e importación.
+Este contexto corresponde a la ampliación Service Desk. Leer docs/contexto/005_service_desk.md y posteriores.
 Incluye TypeORM, importador ExcelJS, interfaz y harness de integración.
 Leer docs/contexto/003_typeorm_importacion.md y 004_responsabilidad.md: cambios reales de decisión.
 
@@ -15,7 +15,7 @@ Leer docs/contexto/003_typeorm_importacion.md y 004_responsabilidad.md: cambios 
 - Jerarquía Empresa → Área → Departamento → Sección → Puesto → Usuario.
 - Una sección responsable por servicio y un usuario opcional de esa sección.
 - Importación repetible, trazabilidad, autenticación y roles administrador/consulta.
-- Excluir tickets, facturación y consumo de servicios.
+- Incluir tickets, colas, siete procesos y CMDB. Excluir facturación y consumo.
 
 ## Fuentes y contexto
 

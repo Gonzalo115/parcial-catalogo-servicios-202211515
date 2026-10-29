@@ -1,0 +1,34 @@
+Cuenta creada: admin
+Cuenta creada: consulta
+{
+  "semilla": "PREVIEW",
+  "conjunto": "seed:PREVIEW",
+  "conteo_generados": 5000,
+  "por_categoria": [
+    {
+      "codigo": "HW",
+      "cantidad": 1
+    },
+    {
+      "codigo": "SW",
+      "cantidad": 0
+    },
+    {
+      "codigo": "HW-SRV",
+      "cantidad": 1616
+    },
+    {
+      "codigo": "HW-PC",
+      "cantidad": 1709
+    },
+    {
+      "codigo": "HW-NET",
+      "cantidad": 1675
+    }
+  ],
+  "observaciones": [
+    "Jerarquía extendida es decisión del proyecto, pendiente validación docente"
+  ]
+}
+Tickets demo conservados/creados: mínimo 37; no se sobrescriben ediciones de evaluación.
+PREVIEW_READY

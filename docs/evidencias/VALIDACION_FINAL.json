@@ -1,0 +1,33 @@
+{
+  "fecha_local": "2026-10-28",
+  "zona": "America/Guatemala",
+  "commit_fuente": "46b07e9e7cf75d9351a399dcbf2ecec0645ef6f3",
+  "entorno": {
+    "so": "Linux-6.18.55-x86_64-with-glibc2.39",
+    "node": "v24.22.1",
+    "base": "PGlite WASM aislado"
+  },
+  "comandos": [
+    {
+      "comando": "npm run test:embedded",
+      "salida": 0,
+      "tests": 23,
+      "log": "base-ampliada.txt"
+    },
+    {
+      "comando": "npm run test:desk",
+      "salida": 0,
+      "tests": 21,
+      "log": "desk-final.txt"
+    },
+    {
+      "comando": "npm run build (backend y frontend)",
+      "salida": 0
+    }
+  ],
+  "pendientes": [
+    "Docker real y P18",
+    "Recorrido visual en navegador",
+    "Validación docente de taxonomía CMDB propuesta"
+  ]
+}

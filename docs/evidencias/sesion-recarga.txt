@@ -1,0 +1,22 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> catalogo-ti-frontend@0.3.0 test
+> node --test tests/*.test.js
+
+✔ recarga: restaura credencial y obtiene usuario y roles actuales del servidor (1.76526ms)
+✔ credencial vencida: no consulta API ni restaura acceso (0.208043ms)
+✔ sesión revocada/desactivada: 401 elimina la credencial (0.25244ms)
+✔ fallo de red no elimina sesión válida; reintento la recupera (0.63039ms)
+✔ error 503 no se confunde con cierre de sesión (0.273593ms)
+✔ cierre de sesión impide restaurar; respuesta antigua no borra otra sesión (0.236507ms)
+✔ datos corruptos o incompletos se descartan sin romper la página (0.26528ms)
+✔ almacenamiento bloqueado permite usar la sesión en memoria (0.366352ms)
+✔ interacciones de sesión y secciones en DOM (260.401412ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 370.301525

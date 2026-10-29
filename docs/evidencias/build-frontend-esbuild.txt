@@ -1,0 +1,7 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> catalogo-ti-frontend@0.3.0 build
+> vite build
+
+vite v7.3.6 building client environment for production...
+transforming...

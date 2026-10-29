@@ -1,3 +1,5 @@
+> Documento histórico del parcial conservado. La ampliación actual se describe en [API_SERVICE_DESK.md](API_SERVICE_DESK.md).
+
 # API
 
 Prefijo `/api`. Enviar `Authorization: Bearer <JWT>` a todos los recursos salvo

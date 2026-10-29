@@ -1,0 +1,5 @@
+46b07e9 (HEAD -> master) feat: completar demo reproducible guía y documentación de verificación
+b12906a fix: corregir carga demo y verificar siete rutas con pruebas aisladas
+597dc46 feat: integrar tickets procesos permisos CMDB y primeras pruebas
+f189e93 docs: ampliar contexto y modelo para Service Desk
+a819c8e chore: conservar base del parcial y fuentes originales

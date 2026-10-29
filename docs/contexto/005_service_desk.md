@@ -1,0 +1,2 @@
+# Ampliación de contexto: Service Desk
+Autorización: el usuario pidió completar el proyecto y entregar ZIP y guía. Se conserva el parcial y se añaden módulos, sin suscripción IA ni despliegue externo. Fuentes originales en data. No se inventan evidencias ni resultados Docker. Los nuevos roles se agregan en usuario_rol conservando el rol base del parcial. Permisos por cola adicionales a roles funcionales. Cola nunca eleva consulta por sí sola.

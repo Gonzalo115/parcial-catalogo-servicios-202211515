@@ -1,161 +1,71 @@
-# Catálogo de servicios TI
+> **Actualización de permisos y diseño:** ver [docs/PARCHE_PORTAL_SOLICITANTE.md](docs/PARCHE_PORTAL_SOLICITANTE.md). Los solicitantes ya no tienen acceso al inventario completo, organización ni indicadores. Las indicaciones antiguas de lectura amplia quedan sustituidas por esa política. Cuenta adicional: solicitante2.
 
-Aplicación con NestJS, TypeORM, PostgreSQL y React. Incluye organización y usuarios,
-CRUD de catálogos, búsqueda, filtros, ficha, responsabilidades e importación auditada
-con ExcelJS. Autenticación local, dos roles, JWT y cierre de sesión revocable.
+# Service Desk y CMDB — 202211515
 
-Integrante: completar nombre. Carné: **202211515** (tomado del nombre del repositorio;
-verificar antes de entregar). Fuente y criterios: [enunciado](docs/ENUNCIADO.md).
+Ampliación del catálogo del Parcial 2: autenticación local, organización, catálogo N1/N2, tickets, ocho colas de demostración, siete procesos, aprobaciones, CMDB y 5,000 dispositivos sintéticos.
 
-## Clon limpio: preparación local reproducible
+**Comience por [GUIA_EJECUCION_Y_PRUEBAS.md](GUIA_EJECUCION_Y_PRUEBAS.md).** Contiene preparación en Windows/Linux, cuentas, funcionalidades y recorrido de los siete procesos.
 
-Requisito: Docker Desktop/Engine y Compose v2.20 o posterior. No requiere Node ni PostgreSQL
-instalados en el anfitrión. Desde la raíz del proyecto, PowerShell:
+Solo se necesita Docker Engine/Desktop con Compose v2.20+; no es necesario instalar Node, npm ni PostgreSQL en el equipo anfitrión. No requiere claves ni suscripción IA. Ejecución local, puertos 8080 (web) y 3100 (API), enlazados a localhost.
+
+## Arranque limpio en PowerShell
+
+Extraiga el ZIP y entre en la carpeta `service-desk` que contiene este README.
 
 ```powershell
 docker run --rm --mount "type=bind,source=$((Get-Location).Path),target=/work" -w /work node:22.22.0-alpine node scripts/configure.mjs
+powershell -ExecutionPolicy Bypass -File scripts/prepare.ps1
 ```
 
-Linux, solamente para preparar `.env`:
+Linux/macOS:
 
 ```bash
 docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/work" -w /work node:22.22.0-alpine node scripts/configure.mjs
+sh scripts/prepare.sh
 ```
 
-Genera secretos aleatorios locales y se niega a sobrescribir `.env`. Si ya existe, conservarlo.
-No dejar `replace-with-...` en las variables: JWT_SECRET debe tener al menos 32 bytes,
-contraseñas demo de 12 caracteres y no más de 72 bytes UTF-8. No publicar `.env`.
-Cambiar POSTGRES_PASSWORD en `.env` no cambia la contraseña de un volumen ya inicializado.
+Si `.env` ya existe, el configurador lo conserva y termina con error. No lo borre: agregue las variables nuevas de `.env.example` y continúe con prepare. El ZIP no incluye un `.env` de trabajo.
 
-En Windows se documentó un conflicto con el puerto 3000. Este ejemplo configura
-`BACKEND_PORT=3100`; para un `.env` anterior, cambiar exclusivamente esa variable si el puerto
-3000 está ocupado o reservado. NestJS continúa escuchando en 3000 **dentro** del contenedor.
-Si tu Compose ya eliminó la publicación de la API, la interfaz sigue accediendo por Nginx.
+Abra **http://localhost:8080**. API: **http://localhost:3100/api**.
 
-## Levantar, cargar y comprobar
+| Cuenta      | Correo                 | Contraseña DEMO predeterminada | Perfil                      |
+| ----------- | ---------------------- | ------------------------------ | --------------------------- |
+| admin       | admin@demo.local       | SA_admin_2026                  | Configuración y supervisión |
+| consulta    | consulta@demo.local    | SA_consulta_2026               | Lectura                     |
+| solicitante | solicitante@demo.local | SA_desk_2026_demo              | Casos propios               |
+| agente1     | agente1@demo.local     | SA_desk_2026_demo              | Atención                    |
+| agente2     | agente2@demo.local     | SA_desk_2026_demo              | Atención / concurrencia     |
+| aprobador   | aprobador@demo.local   | SA_desk_2026_demo              | Decisiones autorizadas      |
+
+Contraseñas exclusivamente demostrativas, configurables localmente. El seed conserva cuentas y contraseñas ya existentes. Cambiar `.env` no cambia cuentas previamente creadas ni la contraseña del volumen PostgreSQL.
+
+## Comandos de comprobación
 
 ```powershell
-# Valida la configuración de Compose y las variables requeridas.
-# No muestra la configuración completa; informa si encuentra errores.
-docker compose config --quiet
-
-# Construye las imágenes y levanta PostgreSQL, backend y frontend
-# en segundo plano. Conserva los datos del volumen existente.
-docker compose up --build -d
-
-# Espera hasta que los servicios estén listos según sus healthchecks.
-# Devuelve un error si no están listos en un máximo de 120 segundos.
-docker compose up -d --wait --wait-timeout 120
-
-# Crea la jerarquía organizacional DEMO y las cuentas admin y consulta.
-# Usa las contraseñas de .env; conserva las cuentas existentes.
-docker compose exec -T nestjs-backend npm run seed:demo
-
-# Importa CatalogoServicios.xlsx: procesa los 12 códigos N1 y 46 N2,
-# registra incidencias y devuelve un resumen de la carga.
-docker compose exec -T nestjs-backend npm run import:excel
-
-# Crea tres asignaciones de demostración entre servicios, sección y usuario.
-# Requiere las cuentas demo y el catálogo; conserva asignaciones existentes.
-docker compose exec -T nestjs-backend npm run seed:asignaciones
-
-# Repite la importación para comprobar que no genera duplicados.
-# Conserva correcciones manuales y responsables; registra otro lote de auditoría.
-docker compose exec -T nestjs-backend npm run import:excel
-
-# Ejecuta pruebas contra la API y PostgreSQL de Docker:
-# autenticación, roles, jerarquía, validaciones, filtros y responsables.
-# Crea y limpia sus propios datos de prueba.
+docker compose --profile pruebas run --build --rm --no-deps verificaciones
 docker compose exec -T nestjs-backend npm run test:harness
-
-# Muestra el estado, la salud y los puertos de los contenedores.
-docker compose ps
-
-# Muestra las últimas 100 líneas de logs del backend
-# para revisar su arranque, las importaciones o posibles errores.
-docker compose logs --tail=100 nestjs-backend
+powershell -ExecutionPolicy Bypass -File scripts/check-persistence-desk.ps1
 ```
 
-El build del backend compila TypeScript y ejecuta la suite aislada de integración con el
-Excel original. Un fallo impide producir la imagen. Al iniciar, el backend aplica las
-migraciones pendientes antes de escuchar. PostgreSQL inicializa la base y la migración 001
-solo sobre un volumen vacío; la 002 se aplica también a volúmenes existentes.
+Primera orden: dos suites aisladas con NestJS/SQL real en PostgreSQL WASM (PGlite). Segunda: harness del parcial contra PostgreSQL/API de Docker. Tercera: P18 real, compara huellas antes/después de apagar y levantar contenedores sin quitar volúmenes. No use la interfaz mientras se compara.
 
-Web: **http://localhost:8080** (o FRONTEND_PORT). API publicada: http://localhost:3100/api
-(o BACKEND_PORT); el navegador usa `/api` en el mismo origen de la web.
+## Documentación
 
-| Usuario  | Correo              | Contraseña       |
-| -------- | ------------------- | ---------------- |
-| admin    | admin@demo.local    | SA_admin_2026    |
-| consulta | consulta@demo.local | SA_consulta_2026 |
+- [Guía de ejecución y pruebas manuales](GUIA_EJECUCION_Y_PRUEBAS.md)
+- [Resolución de la ampliación](docs/RESOLUCION_SERVICE_DESK.md)
+- [Modelo y fuentes CMDB](docs/MODELO_SERVICE_DESK.md)
+- [Procesos, permisos, estados e indicadores](docs/PROCESOS.md)
+- [API ampliada](docs/API_SERVICE_DESK.md)
+- [Pruebas, resultados y límites](docs/PRUEBAS.md)
+- [Ingeniería asistida por IA y ciclos](docs/IA.md)
+- [Modelo del parcial conservado](docs/MODELO.md)
 
-## Recorrido funcional
+Las fuentes originales están en `data/`. Las subcategorías CMDB adicionales son propuesta explícita del proyecto: el Excel contiene Hardware/Software pero no un árbol completo, y la presentación no enumera esa taxonomía. Ver el mapeo de fuentes y la limitación documental.
 
-1. Ingresar como administrador e importar el Excel (botón o comando anterior).
-2. Revisar 12 códigos N1 y 46 N2; reporte con filas 42/67 omitidas, conflicto SE.12 y ausencias.
-3. Crear o editar empresas, áreas, departamentos, secciones, puestos y usuarios en sus módulos.
-4. Mantener clases, criticidades, tipos y ambos niveles; las bajas son lógicas.
-5. Buscar código/nombre y combinar filtros por N1, estado, clase, criticidad y tipo.
-6. Abrir la ficha para consultar los atributos y el padre del servicio.
-7. Editar N2 y seleccionar sección; el usuario opcional se filtra a esa sección.
-   Al crear manualmente un N2 la sección es obligatoria. Un importado puede quedar pendiente.
-8. Ingresar con consulta: lectura de datos funcionales, sin escrituras ni administración de usuarios.
-9. Repetir la importación: sin duplicados; conservar cambios manuales y responsables.
+No se declara verificado Docker en el entorno de construcción de esta entrega: Docker no está disponible allí. Las pruebas aisladas y compilaciones sí tienen resultados reales en docs/evidencias. No equivalen a P18 ni a un recorrido visual en navegador.
 
-Si una baja se rechaza, resolver descendientes activos o asignaciones primero. Para retirar
-un responsable, desactivar el servicio y usar el botón correspondiente; después reasignar
-si corresponde. No se elimina información en cascada.
+## Historial local
 
-## Pruebas
+`VERSION.txt` identifica la fuente validada. `HISTORIAL_COMMITS.txt` lista decisiones y `historial.bundle` conserva commits, sin requerir Git para levantar Docker. Para recuperar el repositorio con Git: `git clone historial.bundle ../service-desk-con-historial`. No se publicó en un remoto.
 
-P01–P11: suite aislada con TypeORM y PostgreSQL embebido, SQL real y peticiones HTTP a NestJS.
-Se ejecuta automáticamente durante el build; manualmente, sin herramientas host adicionales:
-
-```powershell
-docker compose build nestjs-backend
-```
-
-El harness contra la API y PostgreSQL del contenedor usa datos propios identificados por un
-prefijo aleatorio y elimina exclusivamente sus fixtures. Nunca borra el esquema ni los datos
-de evaluación. Ejecutar después de esperar que el backend esté healthy:
-
-```powershell
-docker compose exec -T nestjs-backend npm run test:harness
-```
-
-P12: comparar huellas de usuarios, ambos niveles y responsables antes/después de reiniciar:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/check-persistence.ps1
-```
-
-Linux: `sh scripts/check-persistence.sh`. Si personalizas DB, usar `-DbUser/-DbName` en
-PowerShell, o usuario y base como dos argumentos en Linux. Requiere cuentas y catálogo cargados.
-No imprime contraseñas, hashes de usuarios ni contenido de filas. Salida 0=éxito; otro código=fallo.
-
-## Logs, apagado y recuperación
-
-```powershell
-docker compose logs --tail=100 postgres nestjs-backend
-docker compose down --remove-orphans
-docker compose up -d --wait --wait-timeout 120
-```
-
-El apagado anterior conserva el volumen. Si el backend reinicia, leer el error inicial en sus
-logs: `Configura JWT_SECRET` requiere corregir el valor local y **recrear** el contenedor con
-`docker compose up -d --force-recreate nestjs-backend`. Reiniciar no recarga variables.
-
-Reinicio destructivo, exclusivamente si todos los datos son descartables:
-
-```powershell
-docker compose down --volumes --remove-orphans
-```
-
-## Documentación y entrega
-
-- [Resolución y matriz](docs/RESOLUCION.md)
-- [API](docs/API.md)
-- [modelo/diccionario](docs/MODELO.md)
-- [contexto](AGENTS.md)
-- [prompts utilizados](docs/prompts/PROMPTS_UTILIZADOS.md)
-- [evidencias](docs/evidencias/VERIFICACION_FASE3.md)
+Actualización de sesión al recargar y ficha por secciones: [aplicación y pruebas](docs/PARCHE_SESION_Y_SECCIONES.md).

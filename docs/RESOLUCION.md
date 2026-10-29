@@ -1,3 +1,5 @@
+> Documento histórico del parcial conservado. La ampliación actual se describe en [RESOLUCION_SERVICE_DESK.md](RESOLUCION_SERVICE_DESK.md).
+
 # Resolución — Fase 3
 
 ## Problema, alcance y decisiones

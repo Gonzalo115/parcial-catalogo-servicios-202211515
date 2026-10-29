@@ -1,0 +1,101 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> catalogo-ti-backend@0.3.0 test:desk
+> node --test tests/desk.test.cjs
+
+Cuenta creada: admin
+Cuenta creada: consulta
+▶ Service Desk: fuentes originales, API y PostgreSQL aislado
+  ✔ P01: autenticación y consulta sin permisos de escritura (14.62725ms)
+  ✔ P02: catálogo 12/46 repetible con incidencias originales (1079.970841ms)
+{
+  "semilla": "TEST5000",
+  "conjunto": "seed:TEST5000",
+  "conteo_generados": 5000,
+  "por_categoria": [
+    {
+      "codigo": "HW",
+      "cantidad": 1
+    },
+    {
+      "codigo": "SW",
+      "cantidad": 0
+    },
+    {
+      "codigo": "HW-SRV",
+      "cantidad": 1686
+    },
+    {
+      "codigo": "HW-PC",
+      "cantidad": 1613
+    },
+    {
+      "codigo": "HW-NET",
+      "cantidad": 1701
+    }
+  ],
+  "observaciones": [
+    "Jerarquía extendida es decisión del proyecto, pendiente validación docente"
+  ]
+}
+Tickets demo conservados/creados: mínimo 37; no se sobrescriben ediciones de evaluación.
+{
+  "semilla": "TEST5000",
+  "conjunto": "seed:TEST5000",
+  "conteo_generados": 5000,
+  "por_categoria": [
+    {
+      "codigo": "HW",
+      "cantidad": 1
+    },
+    {
+      "codigo": "SW",
+      "cantidad": 0
+    },
+    {
+      "codigo": "HW-SRV",
+      "cantidad": 1686
+    },
+    {
+      "codigo": "HW-PC",
+      "cantidad": 1613
+    },
+    {
+      "codigo": "HW-NET",
+      "cantidad": 1701
+    }
+  ],
+  "observaciones": [
+    "Jerarquía extendida es decisión del proyecto, pendiente validación docente"
+  ]
+}
+Tickets demo conservados/creados: mínimo 37; no se sobrescriben ediciones de evaluación.
+  ✔ P03: 5000 dispositivos, 37 tickets, repetición sin duplicar (3170.432575ms)
+  ✔ P04: clasificación con origen, rechazo de ciclos y padres inexistentes (36.387787ms)
+  ✔ P05: referencias válidas/inválidas, servicio N1 derivado y condición sin CI (42.352979ms)
+  ✔ P06: permiso por usuario, rol y consulta sin elevación (32.052328ms)
+  ✔ P07: dos agentes toman simultáneamente; solo uno obtiene asignación (61.557435ms)
+  ✔ P08: transferencia y escalamiento con motivo y proceso validado (30.756702ms)
+  ✔ P09/P10: siete rutas completas; cambios sin aprobación y autoaprobación rechazados (740.338066ms)
+  ✔ P11: E0–E3 e incidente idempotente al reabrir evento (403.403953ms)
+  ✔ P12: I0–I6 y regla complementaria de duraciones (9.993338ms)
+  ✔ P13: vínculo incidente–problema–cambio recuperable (22.300722ms)
+  ✔ P14: dependencias CI/servicios, ciclos técnicos según tipo (39.117343ms)
+  ✔ P15: cierre sin resolución, reapertura, bitácora y notas internas (62.715204ms)
+  ✔ Adjuntos: firma, límites, descarga autorizada e interna (32.159337ms)
+{"prueba":"P16","entorno":"Node v24.22.1, PGlite WASM, HTTP local","ms":41.421040999999605,"registros":5000}
+  ✔ P16: filtros y paginación de 5000 dispositivos con tiempo observado (41.661503ms)
+  ✔ P17: objetivos con abiertos, primera atención, pausas y reaperturas (29.856212ms)
+  ✔ Bajas protegidas de usuarios y colas con casos abiertos (23.508782ms)
+  ✔ Seguridad: campos de aprobación reservados y acceso fuera de cola (52.62502ms)
+P18: requiere Docker real; no sustituido por PGlite.
+  ✔ Logout impide reutilización de token (8.580245ms)
+✔ Service Desk: fuentes originales, API y PostgreSQL aislado (10176.990678ms)
+ℹ tests 21
+ℹ suites 0
+ℹ pass 21
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10904.291155

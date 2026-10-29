@@ -1,0 +1,83 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> catalogo-ti-backend@0.3.0 test:desk
+> node --test tests/desk.test.cjs
+
+Cuenta creada: admin
+Cuenta creada: consulta
+▶ Service Desk: fuentes originales, API y PostgreSQL aislado
+  ✔ P01: autenticación y consulta sin permisos de escritura (12.472371ms)
+  ✔ P02: catálogo 12/46 repetible con incidencias originales (997.878648ms)
+  ✖ P03: 5000 dispositivos, 37 tickets, repetición sin duplicar (361.363188ms)
+✖ Service Desk: fuentes originales, API y PostgreSQL aislado (4086.371596ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 2
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4846.686061
+
+✖ failing tests:
+
+test at tests/desk.test.cjs:15:22
+✖ P03: 5000 dispositivos, 37 tickets, repetición sin duplicar (361.363188ms)
+  Error [QueryFailedError]: inconsistent types deduced for parameter $2
+      at PostgresQueryRunner.query (/workspace/scratch/ff1b7e344a11/review/parcial-catalogo-servicios-202211515/backend/node_modules/typeorm/driver/postgres/PostgresQueryRunner.js:216:19)
+      at async DataSource.query (/workspace/scratch/ff1b7e344a11/review/parcial-catalogo-servicios-202211515/backend/node_modules/typeorm/data-source/DataSource.js:353:20)
+      at async prepareDesk (/workspace/scratch/ff1b7e344a11/service-desk/backend/dist/desk/seed.js:26:19)
+      at async seedTickets (/workspace/scratch/ff1b7e344a11/service-desk/backend/dist/desk/seed.js:100:45)
+      at async TestContext.<anonymous> (/workspace/scratch/ff1b7e344a11/service-desk/backend/tests/desk.test.cjs:15:106)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async TestContext.<anonymous> (/workspace/scratch/ff1b7e344a11/service-desk/backend/tests/desk.test.cjs:15:14)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    query: "INSERT INTO usuario(puesto_id,nombre,nombre_usuario,correo,password_hash,rol,activo) VALUES($1,$2,$2,$3,$4,'consulta',true) RETURNING id::text",
+    parameters: [ '1', 'solicitante', 'solicitante@demo.local', '[HASH DEMO OMITIDO]' ],
+    driverError: error: inconsistent types deduced for parameter $2
+        at Re.Gr (/workspace/scratch/ff1b7e344a11/review/parcial-catalogo-servicios-202211515/backend/node_modules/@electric-sql/pglite/dist/index.cjs:3:22154)
+        at Re.Fa (/workspace/scratch/ff1b7e344a11/review/parcial-catalogo-servicios-202211515/backend/node_modules/@electric-sql/pglite/dist/index.cjs:3:19524)
+        at Re.parse (/workspace/scratch/ff1b7e344a11/review/parcial-catalogo-servicios-202211515/backend/node_modules/@electric-sql/pglite/dist/index.cjs:3:18257)
+        at mr.execProtocol (/workspace/scratch/ff1b7e344a11/review/parcial-catalogo-servicios-202211515/backend/node_modules/@electric-sql/pglite/dist/index.cjs:12:188352)
+        at async mr.ne (/workspace/scratch/ff1b7e344a11/review/parcial-catalogo-servicios-202211515/backend/node_modules/@electric-sql/pglite/dist/index.cjs:10:2058)
+        at async /workspace/scratch/ff1b7e344a11/review/parcial-catalogo-servicios-202211515/backend/node_modules/@electric-sql/pglite/dist/index.cjs:10:2279,
+    length: 154,
+    severity: 'ERROR',
+    code: '42P08',
+    detail: 'text versus character varying',
+    hint: undefined,
+    position: '99',
+    internalPosition: undefined,
+    internalQuery: undefined,
+    where: undefined,
+    schema: undefined,
+    table: undefined,
+    column: undefined,
+    dataType: undefined,
+    constraint: undefined,
+    file: 'parse_param.c',
+    line: '226',
+    routine: 'variable_coerce_param_hook',
+    params: [ '1', 'solicitante', 'solicitante@demo.local', '[HASH DEMO OMITIDO]' ],
+    queryOptions: undefined
+  }
+
+test at tests/desk.test.cjs:6:1
+✖ Service Desk: fuentes originales, API y PostgreSQL aislado (4086.371596ms)
+  AssertionError [ERR_ASSERTION]: {"message":"Credenciales inválidas","error":"Unauthorized","statusCode":401}
+  
+  401 !== 200
+  
+      at login (/workspace/scratch/ff1b7e344a11/service-desk/backend/tests/desk.test.cjs:12:197)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (/workspace/scratch/ff1b7e344a11/service-desk/backend/tests/desk.test.cjs:16:96)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 401,
+    expected: 200,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

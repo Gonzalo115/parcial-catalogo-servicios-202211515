@@ -1,3 +1,5 @@
+> Documento histórico del parcial conservado. La ampliación actual se describe en [MODELO_SERVICE_DESK.md](MODELO_SERVICE_DESK.md).
+
 # Modelo y diccionario PostgreSQL / TypeORM
 
 Entidades: `backend/src/db/entities.ts`. DDL: migraciones 001 y 002; nunca synchronize.
