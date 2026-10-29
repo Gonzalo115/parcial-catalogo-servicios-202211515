@@ -1,25 +1,32 @@
+import useSession from './useSession';
+import Desk from './Desk';
 import React,{useCallback,useEffect,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {resources} from './resources';
 import './style.css';
 const status=v=>v==null?'Desconocido':v?'Activo':'Inactivo';
 function App(){
- const [session,setSession]=useState(null),[identifier,setIdentifier]=useState(''),[password,setPassword]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+ const {session,restoring,restoreError,retry,loginSession,invalidate}=useSession();
+ const [identifier,setIdentifier]=useState(''),[password,setPassword]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
  const [resource,setResource]=useState('servicios-nivel2'),[result,setResult]=useState({items:[],total:0}),[filters,setFilters]=useState({}),[page,setPage]=useState(1),[lookups,setLookups]=useState({}),[form,setForm]=useState(null),[detail,setDetail]=useState(null),[report,setReport]=useState(null),[refresh,setRefresh]=useState(0);
  const admin=session?.user.rol==='administrador';
+ const [deskView,setDeskView]=useState(true);
+ const effectiveRoles=session?.user.roles||[session?.user.rol];
+ const portal=!admin&&effectiveRoles.includes('solicitante')&&!effectiveRoles.some(r=>['agente','aprobador'].includes(r));
+ const roleLabel=effectiveRoles.filter(r=>r!=='consulta'||effectiveRoles.length===1).map(r=>r?r[0].toUpperCase()+r.slice(1):'').join(' · ');
  const request=useCallback(async(path,options={},token=session?.access_token)=>{
   const res=await fetch(`/api${path}`,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}});
-  const data=res.status===204?null:await res.json();if(!res.ok){if(res.status===401&&token)setSession(null);throw new Error(Array.isArray(data?.message)?data.message.join(', '):data?.message||'Solicitud rechazada');}return data;
- },[session]);
- useEffect(()=>{if(!session)return;let cancelled=false;
+  const data=res.status===204?null:await res.json();if(!res.ok){if(res.status===401&&token)invalidate(token);throw new Error(Array.isArray(data?.message)?data.message.join(', '):data?.message||'Solicitud rechazada');}return data;
+ },[session,invalidate]);
+ useEffect(()=>{if(!session||portal||deskView)return;let cancelled=false;
   const q=new URLSearchParams({pagina:String(page),limite:'20',...Object.fromEntries(Object.entries(filters).filter(([,v])=>v!==''))});
   request(`/${resource}?${q}`).then(r=>{if(!cancelled)setResult(r);}).catch(e=>{if(!cancelled)setMessage(e.message);});return()=>{cancelled=true;};
- },[session,resource,filters,page,refresh,request]);
- useEffect(()=>{if(!session)return;let cancelled=false;
+ },[session,resource,filters,page,refresh,request,portal,deskView]);
+ useEffect(()=>{if(!session||portal||deskView)return;let cancelled=false;
   async function load(){const sources=Object.keys(resources).filter(k=>k!=='servicios-nivel2'&&(admin||k!=='usuarios'));const entries=await Promise.all(sources.map(async key=>{let items=[],pagina=1,total;do{const r=await request(`/${key}?limite=100&pagina=${pagina++}`);items.push(...r.items);total=r.total;}while(items.length<total);return[key,items];}));if(!cancelled)setLookups(Object.fromEntries(entries));}
   load().catch(e=>{if(!cancelled)setMessage(e.message);});return()=>{cancelled=true;};
- },[session,admin,refresh,request]);
- async function login(e){e.preventDefault();setBusy(true);setMessage('');try{setSession(await request('/auth/login',{method:'POST',body:JSON.stringify({identifier,password})},null));setPassword('');}catch(e){setMessage(e.message);}finally{setBusy(false);}}
+ },[session,admin,refresh,request,portal,deskView]);
+ async function login(e){e.preventDefault();setBusy(true);setMessage('');try{loginSession(await request('/auth/login',{method:'POST',body:JSON.stringify({identifier,password})},null));setPassword('');}catch(e){setMessage(e.message);}finally{setBusy(false);}}
  async function action(fn){setBusy(true);setMessage('');try{await fn();setRefresh(n=>n+1);}catch(e){setMessage(e.message);}finally{setBusy(false);}}
  function navigate(key){setResource(key);setFilters({});setPage(1);setForm(null);setDetail(null);setReport(null);setMessage('');}
  function openForm(item){const record=item||{};const value={};for(const f of resources[resource].fields){value[f.key]=f.type==='password'?'':record[f.key]??(f.type==='boolean'?(f.nullable?'':f.key==='requiere_revision'?false:true):'');}
@@ -37,8 +44,10 @@ function App(){
   return <input type={f.type} value={v} onChange={change} required={!f.nullable&&f.type!=='password'||f.type==='password'&&!form.id} autoComplete={f.type==='password'?'new-password':undefined}/>;
  }
  const labelRef=(key,id)=>lookups[key]?.find(x=>x.id===id)?.nombre||id||'Sin información';
- return <main><header><p className="eyebrow">GESTIÓN DE SERVICIOS TI</p><h1>Catálogo de servicios</h1>{session&&<div className="toolbar"><span>{session.user.nombre} · {session.user.rol}</span><button className="secondary" disabled={busy} onClick={()=>action(async()=>{await request('/auth/logout',{method:'POST'});setSession(null);setForm(null);})}>Cerrar sesión</button></div>}</header>
- {!session?<form className="login" onSubmit={login}><h2>Iniciar sesión</h2><label>Usuario o correo<input required autoComplete="username" value={identifier} onChange={e=>setIdentifier(e.target.value)}/></label><label>Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label><button disabled={busy}>Ingresar</button></form>:<>
+ return <main><header><p className="eyebrow">GESTIÓN DE SERVICIOS TI</p><h1>{portal?'Portal del solicitante':'Catálogo de servicios'}</h1>{session&&<div className="toolbar"><span>{session.user.nombre} · {roleLabel}</span><button className="secondary" disabled={busy} onClick={()=>action(async()=>{await request('/auth/logout',{method:'POST'});invalidate(session.access_token);setForm(null);})}>Cerrar sesión</button></div>}</header>
+ {restoring?<p role="status">Restaurando sesión…</p>:restoreError?<section><p role="alert">{restoreError}</p><button onClick={retry}>Reintentar</button></section>:!session?<form className="login" onSubmit={login}><h2>Iniciar sesión</h2><label>Usuario o correo<input required autoComplete="username" value={identifier} onChange={e=>setIdentifier(e.target.value)}/></label><label>Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label><button disabled={busy}>Ingresar</button></form>:<>
+ <div className="toolbar"><button onClick={()=>setDeskView(true)}>Service Desk</button>{!portal&&<button className="secondary" onClick={()=>setDeskView(false)}>Catálogo y organización</button>}</div>
+ {(deskView||portal)?<Desk request={request} session={session}/>:<>
  <nav aria-label="Módulos">{Object.entries(resources).filter(([,r])=>!r.admin||admin).map(([key,r])=><button className={resource===key?'selected':'secondary'} key={key} onClick={()=>navigate(key)}>{r.label}</button>)}</nav>
  <section><div className="toolbar"><h2>{resources[resource].label}</h2>{admin&&<button disabled={busy} onClick={()=>{openForm();if(resource==='usuarios')setForm(prev=>({...prev,value:{...prev.value,rol:'consulta'}}));}}>Crear registro</button>}{admin&&resource.startsWith('servicios')&&<button disabled={busy} onClick={()=>action(async()=>{const r=await request('/importaciones',{method:'POST'});setReport(r);setMessage('Importación completada.');})}>Importar Excel</button>}{admin&&<button className="secondary" disabled={busy} onClick={()=>action(async()=>{setReport(await request('/importaciones'));})}>Ver importaciones</button>}</div>
  {admin&&['clases','criticidades','tipos'].includes(resource)&&<button className="secondary" disabled={busy} onClick={()=>action(async()=>setReport({mapeos:await request('/catalog/mapeos')}))}>Ver mapeos de etiquetas</button>}
@@ -50,6 +59,7 @@ function App(){
  {form&&<section><h2>{form.id?'Editar':'Crear'} · {resources[resource].label}</h2><form className="edit" onSubmit={save}>{resources[resource].fields.map(f=><label key={f.key}>{f.label}{input(f)}</label>)}<div className="toolbar"><button disabled={busy}>Guardar</button><button type="button" className="secondary" onClick={()=>setForm(null)}>Cancelar</button>{resource==='servicios-nivel2'&&form.id&&form.original.responsable&&<button type="button" className="danger" disabled={busy} onClick={()=>action(async()=>{await request(`/servicios-nivel2/${form.id}/responsable`,{method:'DELETE'});setForm(null);setMessage('Responsable retirado.');})}>Retirar responsable (servicio inactivo)</button>}</div></form></section>}
  {detail&&<section><div className="toolbar"><h2>Ficha · {detail.nombre}</h2><button className="secondary" onClick={()=>setDetail(null)}>Cerrar ficha</button></div><dl>{resources[resource].fields.filter(f=>f.type!=='password').map(f=>{let v=detail[f.key];if(['seccion_id','usuario_id'].includes(f.key)&&resource==='servicios-nivel2')v=detail.responsable?.[f.key];return <React.Fragment key={f.key}><dt>{f.label}</dt><dd>{f.type==='ref'?(f.key==='usuario_id'&&resource==='servicios-nivel2'?detail.responsable?.usuario?.nombre||'Sin usuario':labelRef(f.source,v)):f.type==='boolean'?(f.key==='requiere_revision'?(v?'Sí':'No'):status(v)):v??'Sin información'}</dd></React.Fragment>;})}</dl>{resource==='usuarios'&&<p>Empresa: {detail.puesto?.seccion?.departamento?.area?.empresa?.nombre}</p>}</section>}
  {report&&<section><h2>{report.mapeos?'Mapeos de etiquetas':'Reporte de importación'}</h2>{report.control&&<p>{report.control.nivel1} códigos Nivel 1 · {report.control.nivel2} códigos Nivel 2 · Lote {report.importacion_id}</p>}<pre>{JSON.stringify(report,null,2)}</pre><button className="secondary" onClick={()=>setReport(null)}>Cerrar reporte</button></section>}
+ </>}
  </>}
  <p role="status" aria-live="polite" className="message">{message}</p></main>;
 }
