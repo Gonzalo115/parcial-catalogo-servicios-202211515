@@ -15,6 +15,7 @@ export class UsersService {
     const {rows} = await this.db.query(`SELECT u.id::text,u.nombre,u.nombre_usuario,u.correo,
       u.rol,u.puesto_id::text,u.password_hash FROM usuario u ${ACTIVE_HIERARCHY}
       WHERE lower(${field})=$1 AND ${ACTIVE_FILTER}`, [identifier.trim().toLowerCase()]);
+    if(rows[0]){const extra=await this.db.query('SELECT rol FROM usuario_rol WHERE usuario_id=$1',[rows[0].id]);rows[0].roles=[rows[0].rol,...extra.rows.map(x=>x.rol)];}
     return rows[0] || null;
   }
   async findActiveSession(userId:string, sessionId:string):Promise<SafeUser|null> {
@@ -22,6 +23,7 @@ export class UsersService {
       FROM usuario u ${ACTIVE_HIERARCHY} JOIN sesion t ON t.usuario_id=u.id
       WHERE u.id=$1 AND t.id=$2 AND t.revocada_en IS NULL AND t.expira_en>now()
       AND ${ACTIVE_FILTER}`,[userId,sessionId]);
+    if(rows[0]){const extra=await this.db.query('SELECT rol FROM usuario_rol WHERE usuario_id=$1',[rows[0].id]);rows[0].roles=[rows[0].rol,...extra.rows.map(x=>x.rol)];}
     return rows[0] || null;
   }
 }

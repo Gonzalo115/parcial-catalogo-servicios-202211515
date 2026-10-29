@@ -1,3 +1,4 @@
+import { DeskModule } from './desk/desk.module';
 import { Controller, Get, HttpCode, Module, Post, ServiceUnavailableException } from '@nestjs/common';
 import { CrudModule } from './crud/crud.module';
 import { ImporterModule } from './importer/importer.module';
@@ -24,5 +25,5 @@ class BaseController {
   @Roles('administrador') @Post('admin/check') @HttpCode(204)
   adminCheck() {} // Control de autorización; no sustituye el mantenimiento funcional.
 }
-@Module({imports:[DbModule,AuthModule,CrudModule,ImporterModule],controllers:[BaseController]})
+@Module({imports:[DbModule,AuthModule,CrudModule,ImporterModule,DeskModule],controllers:[BaseController]})
 export class AppModule {}

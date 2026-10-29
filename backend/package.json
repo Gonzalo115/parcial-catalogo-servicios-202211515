@@ -10,7 +10,10 @@
     "test:embedded": "node --test tests/embedded.test.cjs",
     "test:harness": "node --test tests/live.test.cjs",
     "import:excel": "node dist/scripts/import-excel.js",
-    "seed:asignaciones": "node dist/scripts/seed-assignments.js"
+    "seed:asignaciones": "node dist/scripts/seed-assignments.js",
+    "seed:desk": "node dist/scripts/seed-desk.js",
+    "generate:cmdb": "node dist/scripts/seed-desk.js --cmdb-only",
+    "test:desk": "node --test tests/desk.test.cjs"
   },
   "dependencies": {
     "@nestjs/common": "11.2.7",

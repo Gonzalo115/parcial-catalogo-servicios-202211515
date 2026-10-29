@@ -22,7 +22,7 @@ export class AuthService {
     // El hash nunca se devuelve al navegador.
     return {access_token,token_type:'Bearer',expires_in:900,user:{
       id:String(user.id),nombre:user.nombre,nombre_usuario:user.nombre_usuario,
-      correo:user.correo,rol:user.rol,puesto_id:String(user.puesto_id)}};
+      correo:user.correo,rol:user.rol,roles:user.roles,puesto_id:String(user.puesto_id)}};
   }
   async logout(sessionId:string) {
     await this.db.query('UPDATE sesion SET revocada_en=now() WHERE id=$1 AND revocada_en IS NULL',[sessionId]);
