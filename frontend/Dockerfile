@@ -3,7 +3,7 @@ WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm ci
 COPY frontend/ ./
-RUN npm run build
+RUN npm test && npm run build
 
 FROM nginx:1.28.2-alpine
 COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf

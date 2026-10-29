@@ -42,6 +42,9 @@ services:
       JWT_AUDIENCE: catalogo-web
       DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-}
       DEMO_CONSULTA_PASSWORD: ${DEMO_CONSULTA_PASSWORD:-}
+      DEMO_DESK_PASSWORD: ${DEMO_DESK_PASSWORD:-SA_desk_2026_demo}
+      CMDB_SEED: ${CMDB_SEED:-202211515}
+      CMDB_COUNT: ${CMDB_COUNT:-5000}
     ports:
       - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
     volumes:
@@ -79,6 +82,14 @@ services:
       retries: 5
     networks: [catalogo_net]
     restart: unless-stopped
+
+  verificaciones:
+    profiles: [pruebas]
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+      target: verification
+    network_mode: none
 
 volumes:
   postgres_data:
