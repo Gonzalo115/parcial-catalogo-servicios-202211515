@@ -1,0 +1,12 @@
+commit f189e93315d799151a962f2c92f7a3fa51b9c260
+Author:     Proyecto Service Desk <demo@local.invalid>
+AuthorDate: Wed Oct 28 22:24:45 2026 -0600
+Commit:     Proyecto Service Desk <demo@local.invalid>
+CommitDate: Wed Oct 28 22:24:45 2026 -0600
+
+    docs: ampliar contexto y modelo para Service Desk
+
+ AGENTS.md                          |   4 +-
+ db/migrations/003_service_desk.sql | 116 +++++++++++++++++++++++++++++++++++++
+ docs/contexto/005_service_desk.md  |   2 +
+ 3 files changed, 120 insertions(+), 2 deletions(-)

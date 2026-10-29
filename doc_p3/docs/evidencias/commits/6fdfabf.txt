@@ -1,0 +1,26 @@
+commit 6fdfabf2995d7ebb9697fc2f1da9d33bfc45bcbb
+Author:     Codex <codex@openai.com>
+AuthorDate: Thu Oct 29 16:22:01 2026 -0600
+Commit:     Codex <codex@openai.com>
+CommitDate: Thu Oct 29 16:22:01 2026 -0600
+
+    fix: restore session on reload and organize ticket sections
+
+ README.md                                  |   2 +
+ docs/PARCHE_SESION_Y_SECCIONES.md          |  46 +++++
+ docs/contexto/009_sesion_y_secciones.md    |   5 +
+ docs/evidencias/build-secciones-sesion.txt |  14 ++
+ docs/evidencias/sesion-recarga.txt         |  22 +++
+ frontend/Dockerfile                        |   2 +-
+ frontend/package-lock.json                 | 303 +++++++++++++++++++++++++++++
+ frontend/package.json                      |   5 +-
+ frontend/src/Desk.jsx                      |  24 ++-
+ frontend/src/TicketWorkspace.jsx           |  16 ++
+ frontend/src/main.jsx                      |  14 +-
+ frontend/src/session.js                    |  31 +++
+ frontend/src/style.css                     |  22 +++
+ frontend/src/useSession.jsx                |  32 +++
+ frontend/tests/session.test.js             |  56 ++++++
+ frontend/tests/ui-cases.jsx                |  87 +++++++++
+ frontend/tests/ui.test.js                  |  15 ++
+ 17 files changed, 681 insertions(+), 15 deletions(-)

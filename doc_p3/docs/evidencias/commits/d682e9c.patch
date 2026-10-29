@@ -1,0 +1,898 @@
+commit d682e9c4a71e355656a9575c2661ce8918bf34c1
+Author:     Proyecto Service Desk <demo@local.invalid>
+AuthorDate: Fri Oct 30 04:20:08 2026 +0900
+Commit:     Proyecto Service Desk <demo@local.invalid>
+CommitDate: Fri Oct 30 04:20:26 2026 +0900
+
+    fix: aislar portal solicitante agregar segunda cuenta y paneles laterales
+
+diff --git a/GUIA_EJECUCION_Y_PRUEBAS.md b/GUIA_EJECUCION_Y_PRUEBAS.md
+index 03a24e7..6664723 100644
+--- a/GUIA_EJECUCION_Y_PRUEBAS.md
++++ b/GUIA_EJECUCION_Y_PRUEBAS.md
+@@ -1,3 +1,5 @@
++> **Actualización de permisos y diseño:** ver [docs/PARCHE_PORTAL_SOLICITANTE.md](docs/PARCHE_PORTAL_SOLICITANTE.md). Los solicitantes ya no tienen acceso al inventario completo, organización ni indicadores. Las indicaciones antiguas de lectura amplia quedan sustituidas por esa política. Cuenta adicional: solicitante2.
++
+ # Guía de ejecución y funcionalidades
+ 
+ ## 1. Qué realiza el sistema
+diff --git a/README.md b/README.md
+index 138302b..783ba71 100644
+--- a/README.md
++++ b/README.md
+@@ -1,3 +1,5 @@
++> **Actualización de permisos y diseño:** ver [docs/PARCHE_PORTAL_SOLICITANTE.md](docs/PARCHE_PORTAL_SOLICITANTE.md). Los solicitantes ya no tienen acceso al inventario completo, organización ni indicadores. Las indicaciones antiguas de lectura amplia quedan sustituidas por esa política. Cuenta adicional: solicitante2.
++
+ # Service Desk y CMDB — 202211515
+ 
+ Ampliación del catálogo del Parcial 2: autenticación local, organización, catálogo N1/N2, tickets, ocho colas de demostración, siete procesos, aprobaciones, CMDB y 5,000 dispositivos sintéticos.
+diff --git a/backend/src/auth/portal-policy.ts b/backend/src/auth/portal-policy.ts
+new file mode 100644
+index 0000000..d15d67b
+--- /dev/null
++++ b/backend/src/auth/portal-policy.ts
+@@ -0,0 +1,5 @@
++/** Consulta pura conserva lectura funcional. Un solicitante sin funciones operativas usa solo su portal. */
++export function portalOnly(u: {rol?:string;roles?:string[]}|undefined): boolean {
++ const roles=u?.roles||[];
++ return !!u && u.rol!=='administrador' && roles.includes('solicitante') && !roles.some(r=>['agente','aprobador'].includes(r));
++}
+diff --git a/backend/src/auth/roles.guard.ts b/backend/src/auth/roles.guard.ts
+index b38e745..bc6d3e3 100644
+--- a/backend/src/auth/roles.guard.ts
++++ b/backend/src/auth/roles.guard.ts
+@@ -1,3 +1,4 @@
++import { portalOnly } from './portal-policy';
+ import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
+ import { Reflector } from '@nestjs/core';
+ import { IS_PUBLIC, ROLE_KEY } from './decorators';
+@@ -9,6 +10,14 @@ export class RolesGuard implements CanActivate {
+     const targets=[context.getHandler(),context.getClass()];
+     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC,targets)) return true;
+     const request=context.switchToHttp().getRequest<AuthRequest>();
++    if (portalOnly(request.user)) {
++      const path=request.path.replace(/\/+$/, '');
++      const permitted=/^\/api\/auth\/(me|logout)$/.test(path) ||
++        /^\/api\/desk\/(bootstrap|faq|ci-opciones)$/.test(path) ||
++        /^\/api\/desk\/tickets(?:\/[1-9]\d*(?:\/(accion|comentarios|adjuntos))?)?$/.test(path) ||
++        /^\/api\/desk\/adjuntos\/[1-9]\d*$/.test(path);
++      if(!permitted)throw new ForbiddenException('Módulo no disponible para solicitantes');
++    }
+     const allowed=this.reflector.getAllAndOverride<Role[]>(ROLE_KEY,targets);
+     if (!request.user || (allowed && !allowed.includes(request.user.rol)) ||
+         (!allowed && !['GET','HEAD','OPTIONS'].includes(request.method) && request.user.rol!=='administrador')) {
+diff --git a/backend/src/desk/desk.module.ts b/backend/src/desk/desk.module.ts
+index 78aaefe..d12cf52 100644
+--- a/backend/src/desk/desk.module.ts
++++ b/backend/src/desk/desk.module.ts
+@@ -14,67 +14,67 @@ class DeskController {
+     @Get('tickets')
+     tickets(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Query()
+     q: any) { return this.desk.tickets(r.user, q); }
+     @Post('tickets')
+     create(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Body()
+     b: any) { return this.desk.create(r.user, b); }
+     @Get('tickets/:id')
+     ticket(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+     id: string) { return this.desk.detail(r.user, id); }
+     @Patch('tickets/:id')
+     edit(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.edit(r.user, id, b); }
+     @Post('tickets/:id/accion')
+     action(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.action(r.user, id, b); }
+     @Post('tickets/:id/comentarios')
+     comment(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.comment(r.user, id, b); }
+     @Post('tickets/:id/adjuntos')
+     upload(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.upload(r.user, id, b); }
+     @Get('adjuntos/:id')
+     async download(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Res()
+     res: Response) { const a = await this.desk.download(r.user, id); res.setHeader('Content-Type', a.mime); res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Content-Disposition', `attachment; filename="${a.nombre.replace(/[^a-zA-Z0-9._-]/g, '_')}"`); res.send(a.contenido); }
+     @Post('tickets/:id/relaciones')
+     link(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.link(r.user, id, b); }
+     @Get('colas')
+@@ -84,83 +84,85 @@ class DeskController {
+     @Post('colas')
+     queue(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Body()
+     b: any) { return this.desk.saveQueue(r.user, b); }
+     @Patch('colas/:id')
+     queueEdit(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.saveQueue(r.user, b, id); }
+     @Post('roles')
+     roles(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Body()
+     b: any) { return this.desk.setRoles(r.user, b); }
++    @Get('ci-opciones')
++    ciOptions(@Req() r:AuthRequest,@Query() q:any){return this.desk.ciOptions(r.user,q);}
+     @Get('ci')
+     cis(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Query()
+     q: any) { return this.desk.cis(r.user, q); }
+     @Post('ci')
+     ci(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Body()
+     b: any) { return this.desk.saveCi(r.user, b); }
+     @Patch('ci/:id')
+     editCi(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.saveCi(r.user, b, id); }
+     @Get('ci/:id')
+     ciDetail(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+     id: string) { return this.desk.ciDetail(r.user, id); }
+     @Post('ci/:id/relaciones')
+     ciLink(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.ciLink(r.user, id, b); }
+     @Post('clases')
+     clase(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Body()
+     b: any) { return this.desk.clase(r.user, b); }
+     @Patch('clases/:id')
+     claseEdit(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.clase(r.user, b, id); }
+     @Post('ubicaciones')
+     location(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Body()
+     b: any) { return this.desk.location(r.user, b); }
+     @Patch('ubicaciones/:id')
+     locationEdit(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Param('id')
+-    id: string, 
++    id: string,
+     @Body()
+     b: any) { return this.desk.location(r.user, b, id); }
+     @Get('indicadores')
+@@ -172,7 +174,7 @@ class DeskController {
+     @Post('faq')
+     saveFaq(
+     @Req()
+-    r: AuthRequest, 
++    r: AuthRequest,
+     @Body()
+     b: any) { return this.desk.saveFaq(r.user, b); }
+ }
+diff --git a/backend/src/desk/desk.service.ts b/backend/src/desk/desk.service.ts
+index 8612edd..ad54dd9 100644
+--- a/backend/src/desk/desk.service.ts
++++ b/backend/src/desk/desk.service.ts
+@@ -1,3 +1,4 @@
++import { portalOnly } from '../auth/portal-policy';
+ import { Injectable, BadRequestException, ForbiddenException, NotFoundException, ConflictException } from '@nestjs/common';
+ import { DataSource, EntityManager } from 'typeorm';
+ import { requireId } from '../common/dto';
+@@ -34,6 +35,7 @@ export class DeskService {
+         return !!await this.one(`SELECT 1 FROM cola_permiso WHERE cola_id=$1 AND $2=ANY(permisos) AND (usuario_id=$3 OR rol=ANY($4::text[])) LIMIT 1`, [queue, perm, u.id, [...activeRoles(u)]], m);
+     }
+     private async can(u: any, t: any, p = 'consultar', m = this.db.manager) {
++        if(portalOnly(u)&&String(t.solicitante_id)!==String(u.id))throw new ForbiddenException('Solo puede consultar sus propios tickets');
+         if (p === 'consultar' && (u.rol === 'administrador' || (u.rol === 'consulta' && activeRoles(u).size === 1) || String(t.solicitante_id) === u.id))
+             return;
+         if (!await this.permission(u, t.cola_id, p, m))
+@@ -47,8 +49,24 @@ export class DeskService {
+         bad('Servicio inexistente o inactivo'); }
+     private async worker(id: any, queue: any, m: EntityManager) { await this.user(id, m); const u = await this.one('SELECT id::text,rol FROM usuario WHERE id=$1', [id], m); u.roles = (await this.q('SELECT rol FROM usuario_rol WHERE usuario_id=$1', [id], m)).map(x => x.rol); if (!await this.permission(u, queue, 'atender', m))
+         bad('Agente no autorizado para cola'); }
+-    async bootstrap(u: any) { return { user: u, flows: FLOWS, incidentes: INCIDENTS, soporte: SUPPORT, procesos: await this.q('SELECT * FROM proceso ORDER BY codigo'), colas: await this.queues(u), clases: await this.q('SELECT * FROM ci_clase ORDER BY id'), ubicaciones: await this.q('SELECT * FROM ubicacion ORDER BY id'), usuarios: u.rol === 'administrador' ? await this.q(`SELECT u.id::text,u.nombre,u.nombre_usuario,u.rol,u.activo,coalesce((SELECT jsonb_agg(r.rol) FROM usuario_rol r WHERE r.usuario_id=u.id),'[]') roles FROM usuario u ORDER BY id`) : await this.q(`SELECT id::text,nombre FROM usuario WHERE activo AND (id=$1 OR id IN(SELECT usuario_id FROM usuario_rol WHERE rol IN ('agente','aprobador')))`, [u.id]), niveles1: await this.q('SELECT id::text,codigo,nombre FROM servicio_nivel1 WHERE activo IS DISTINCT FROM false ORDER BY codigo'), secciones: await this.q('SELECT id::text,codigo,nombre FROM seccion WHERE activo ORDER BY codigo'), servicios: await this.q('SELECT id::text,codigo,nombre,nivel1_id::text,activo FROM servicio_nivel2 ORDER BY codigo') }; }
+-    async queues(u: any) { const rows = await this.q(`SELECT c.*,coalesce((SELECT jsonb_agg(p) FROM cola_permiso p WHERE p.cola_id=c.id),'[]') permisos FROM cola c ORDER BY codigo`); const out = []; for (const c of rows)
++    private portalTicket(t:any) {
++        const keys=['id','titulo','descripcion','estado','prioridad','impacto','urgencia','canal','creado_en','actualizado_en','primera_atencion','resuelto_en','cerrado_en','resolucion','sin_ci_motivo','proceso','tipo','servicio','servicio_codigo','nivel1_id','responsable'];
++        return Object.fromEntries(keys.filter(k=>k in t).map(k=>[k,t[k]]));
++    }
++    async ciOptions(u:any,q:any={}) {
++        const limit=positive(q.limite??30,'limite',100);
++        return {items:await this.q(`SELECT id::text,codigo,nombre FROM ci WHERE activo AND ($1::boolean=false OR responsable_id=$2) AND (codigo||' '||nombre) ILIKE $3 ORDER BY codigo LIMIT $4`,[portalOnly(u),u.id,`%${String(q.buscar||'').slice(0,200)}%`,limit])};
++    }
++    async bootstrap(u: any) {
++        if(portalOnly(u))return {
++          user:u,portal:true,flows:{},soporte:[],clases:[],ubicaciones:[],niveles1:[],secciones:[],
++          incidentes:INCIDENTS,procesos:await this.q('SELECT codigo,nombre,tipo FROM proceso ORDER BY codigo'),
++          colas:await this.q(`SELECT DISTINCT ON(c.proceso) c.id::text,p.nombre,c.proceso,c.activo FROM cola c JOIN proceso p ON p.codigo=c.proceso WHERE c.activo ORDER BY c.proceso,c.nivel,c.id`),
++          usuarios:[{id:u.id,nombre:u.nombre}],
++          servicios:await this.q('SELECT n.id::text,n.codigo,n.nombre FROM servicio_nivel2 n JOIN servicio_nivel1 p ON p.id=n.nivel1_id WHERE n.activo IS DISTINCT FROM false AND p.activo IS DISTINCT FROM false ORDER BY n.codigo')
++        };
++        return { user: u, flows: FLOWS, incidentes: INCIDENTS, soporte: SUPPORT, procesos: await this.q('SELECT * FROM proceso ORDER BY codigo'), colas: await this.queues(u), clases: await this.q('SELECT * FROM ci_clase ORDER BY id'), ubicaciones: await this.q('SELECT * FROM ubicacion ORDER BY id'), usuarios: u.rol === 'administrador' ? await this.q(`SELECT u.id::text,u.nombre,u.nombre_usuario,u.rol,u.activo,coalesce((SELECT jsonb_agg(r.rol) FROM usuario_rol r WHERE r.usuario_id=u.id),'[]') roles FROM usuario u ORDER BY id`) : await this.q(`SELECT id::text,nombre FROM usuario WHERE activo AND (id=$1 OR id IN(SELECT usuario_id FROM usuario_rol WHERE rol IN ('agente','aprobador')))`, [u.id]), niveles1: await this.q('SELECT id::text,codigo,nombre FROM servicio_nivel1 WHERE activo IS DISTINCT FROM false ORDER BY codigo'), secciones: await this.q('SELECT id::text,codigo,nombre FROM seccion WHERE activo ORDER BY codigo'), servicios: await this.q('SELECT id::text,codigo,nombre,nivel1_id::text,activo FROM servicio_nivel2 ORDER BY codigo') }; }
++    async queues(u: any) { if(portalOnly(u))throw new ForbiddenException('Módulo operativo no disponible para solicitantes'); const rows = await this.q(`SELECT c.*,coalesce((SELECT jsonb_agg(p) FROM cola_permiso p WHERE p.cola_id=c.id),'[]') permisos FROM cola c ORDER BY codigo`); const out = []; for (const c of rows)
+         if (u.rol === 'administrador' || (u.rol === 'consulta' && activeRoles(u).size === 1) || activeRoles(u).has('solicitante') || await this.permission(u, c.id, 'consultar'))
+             out.push(c); return out; }
+     async setRoles(u: any, b: any) { this.admin(u); obj(b, ['usuario_id', 'roles']); if (!Array.isArray(b.roles) || b.roles.some((x: any) => !['solicitante', 'agente', 'aprobador'].includes(x)))
+@@ -99,7 +117,8 @@ export class DeskService {
+         let args: any[] = [];
+         const w: string[] = [];
+         const add = (s: string, v: any) => { args.push(v); w.push(s.replace('?', `$${args.length}`)); };
+-        if (u.rol !== 'administrador' && !(u.rol === 'consulta' && activeRoles(u).size === 1)) {
++        if(portalOnly(u)) {args.push(u.id);w.push('t.solicitante_id=$1');}
++        else if (u.rol !== 'administrador' && !(u.rol === 'consulta' && activeRoles(u).size === 1)) {
+             args.push(u.id, [...activeRoles(u)]);
+             w.push(`(t.solicitante_id=$1 OR EXISTS(SELECT 1 FROM cola_permiso cp WHERE cp.cola_id=t.cola_id AND 'consultar'=ANY(cp.permisos) AND (cp.usuario_id=$1 OR cp.rol=ANY($2::text[]))))`);
+         }
+@@ -119,7 +138,7 @@ export class DeskService {
+         const where = w.length ? 'WHERE ' + w.join(' AND ') : '';
+         const total = (await this.one(`SELECT count(*)::int total FROM ticket t JOIN cola c ON c.id=t.cola_id ${where}`, args)).total;
+         const items = await this.q(`SELECT t.*,c.nombre cola,c.proceso,p.tipo,s.codigo servicio_codigo,s.nombre servicio,s.nivel1_id::text,u.nombre responsable FROM ticket t JOIN cola c ON c.id=t.cola_id JOIN proceso p ON p.codigo=c.proceso JOIN servicio_nivel2 s ON s.id=t.servicio_id LEFT JOIN usuario u ON u.id=t.responsable_id ${where} ORDER BY CASE WHEN c.orden='prioridad_antiguedad' THEN t.prioridad ELSE 0 END,t.creado_en,t.id LIMIT $${args.length + 1} OFFSET $${args.length + 2}`, [...args, limit, (page - 1) * limit]);
+-        return { items, total, pagina: page, limite: limit };
++        return { items:portalOnly(u)?items.map(t=>this.portalTicket(t)):items, total, pagina: page, limite: limit };
+     }
+     private incident(d: any, priority: any) { if (!/^I[0-6]$/.test(d.categoria || ''))
+         bad('Categoría I0–I6 requerida'); for (const k of ['duracion_estimada_h', 'duracion_real_h'])
+@@ -129,7 +148,7 @@ export class DeskService {
+         bad('Indique afectación'); if (d.duracion_estimada_h != null && incidentCategory(Number(d.duracion_estimada_h), d.afectacion === 'seguridad') !== d.categoria)
+         bad('Categoría incompatible con regla complementaria de duración'); const mapping = INCIDENTS.find(x => x.categoria === d.categoria)!; if (Number(priority) !== mapping.prioridad || d.redundancia !== mapping.redundancia)
+         text(d.justificacion_clasificacion, 'justificacion_clasificacion'); }
+-    async create(u: any, b: any) { this.role(u, 'solicitante', 'agente'); obj(b, ['titulo', 'descripcion', 'solicitante_id', 'servicio_id', 'cola_id', 'prioridad', 'impacto', 'urgencia', 'canal', 'ci_ids', 'sin_ci_motivo', 'detalle', 'clave_externa']); return this.tx(m => this.createTx(u, b, m)); }
++    async create(u: any, b: any) { this.role(u, 'solicitante', 'agente'); obj(b, ['titulo', 'descripcion', 'solicitante_id', 'servicio_id', 'cola_id', 'prioridad', 'impacto', 'urgencia', 'canal', 'ci_ids', 'sin_ci_motivo', 'detalle', 'clave_externa']); return this.tx(m => this.createTx(u, b, m)).then(t=>portalOnly(u)?this.portalTicket(t):t); }
+     private async createTx(u: any, b: any, m: EntityManager) {
+         const title = text(b.titulo, 'titulo', 300), description = text(b.descripcion, 'descripcion');
+         const requester = b.solicitante_id || u.id;
+@@ -165,6 +184,10 @@ export class DeskService {
+             bad('CI inválidos');
+         if (!cis.length)
+             text(b.sin_ci_motivo, 'Motivo sin CI');
++        if(portalOnly(u))for(const ci of cis){
++          if(!await this.one('SELECT 1 FROM ci WHERE id=$1 AND activo AND responsable_id=$2',[requireId(String(ci)),u.id],m))throw new ForbiddenException('CI no autorizado para este solicitante');
++        }
++        if(portalOnly(u)&&queue.proceso==='accesos'&&String(d.beneficiario_id)!==String(u.id))throw new ForbiddenException('El beneficiario debe ser el propio solicitante');
+         for (const ci of cis)
+             if (!await this.one('SELECT 1 FROM ci WHERE id=$1 AND activo', [requireId(String(ci))], m))
+                 bad('CI inexistente o inactivo');
+@@ -178,7 +201,13 @@ export class DeskService {
+         const t = await this.ticket(id);
+         await this.can(u, t);
+         const internal = await this.permission(u, t.cola_id, 'consultar') && (u.rol === 'administrador' || activeRoles(u).has('agente') || activeRoles(u).has('aprobador'));
+-        return { ...t, servicio: await this.one('SELECT n.*,p.nombre nivel1 FROM servicio_nivel2 n JOIN servicio_nivel1 p ON p.id=n.nivel1_id WHERE n.id=$1', [t.servicio_id]), ci: await this.q('SELECT c.id::text,c.codigo,c.nombre FROM ticket_ci x JOIN ci c ON c.id=x.ci_id WHERE ticket_id=$1', [id]), comentarios: await this.q('SELECT c.*,u.nombre actor FROM comentario c JOIN usuario u ON u.id=c.actor_id WHERE ticket_id=$1 AND (NOT interno OR $2) ORDER BY c.id', [id, internal]), adjuntos: await this.q('SELECT id::text,nombre,mime,interno FROM adjunto WHERE ticket_id=$1 AND (NOT interno OR $2) ORDER BY id', [id, internal]), bitacora: await this.q('SELECT b.*,u.nombre actor FROM bitacora b JOIN usuario u ON u.id=b.actor_id WHERE entidad=$1 AND registro_id=$2 ORDER BY b.id', ['ticket', id]), relaciones: await this.q('SELECT * FROM ticket_relacion WHERE origen_id=$1 OR destino_id=$1', [id]), notificaciones: await this.q('SELECT * FROM notificacion WHERE ticket_id=$1 ORDER BY id', [id]), transiciones: FLOWS[t.proceso] };
++        const result:any = { ...t, servicio: await this.one('SELECT n.*,p.nombre nivel1 FROM servicio_nivel2 n JOIN servicio_nivel1 p ON p.id=n.nivel1_id WHERE n.id=$1', [t.servicio_id]), ci: await this.q('SELECT c.id::text,c.codigo,c.nombre FROM ticket_ci x JOIN ci c ON c.id=x.ci_id WHERE ticket_id=$1', [id]), comentarios: await this.q('SELECT c.*,u.nombre actor FROM comentario c JOIN usuario u ON u.id=c.actor_id WHERE ticket_id=$1 AND (NOT interno OR $2) ORDER BY c.id', [id, internal]), adjuntos: await this.q('SELECT id::text,nombre,mime,interno FROM adjunto WHERE ticket_id=$1 AND (NOT interno OR $2) ORDER BY id', [id, internal]), bitacora: await this.q('SELECT b.*,u.nombre actor FROM bitacora b JOIN usuario u ON u.id=b.actor_id WHERE entidad=$1 AND registro_id=$2 ORDER BY b.id', ['ticket', id]), relaciones: await this.q('SELECT * FROM ticket_relacion WHERE origen_id=$1 OR destino_id=$1', [id]), notificaciones: await this.q('SELECT * FROM notificacion WHERE ticket_id=$1 ORDER BY id', [id]), transiciones: FLOWS[t.proceso] };
++        if(!portalOnly(u))return result;
++        return {...this.portalTicket(result),
++          servicio:{codigo:result.servicio.codigo,nombre:result.servicio.nombre,nivel1:result.servicio.nivel1,nivel1_id:result.servicio.nivel1_id},
++          ci:result.ci,comentarios:result.comentarios.map((c:any)=>({id:c.id,actor:c.actor,texto:c.texto,fecha:c.fecha,interno:false})),
++          adjuntos:result.adjuntos,transiciones:[],relaciones:[],notificaciones:[],
++          bitacora:result.bitacora.map((b:any)=>({id:b.id,fecha:b.fecha,accion:b.accion,actor:'Mesa de servicio',anterior:b.anterior?{estado:b.anterior.estado}:null,nuevo:b.nuevo?{estado:b.nuevo.estado}:null}))};
+     }
+     async edit(u: any, id: string, b: any) { obj(b, ['titulo', 'descripcion', 'prioridad', 'impacto', 'urgencia', 'detalle']); return this.tx(async (m) => { const t = await this.ticket(id, m); await this.can(u, t, 'atender', m); if (['cerrado', 'rechazado'].includes(t.estado))
+         bad('Ticket finalizado'); const d = { ...t.detalle, ...(b.detalle || {}) }; for (const protectedKey of ['aprobado_por', 'aprobado_en', 'servicio_creado_id'])
+@@ -356,7 +385,7 @@ export class DeskService {
+             else
+                 bad('Acción desconocida');
+             await this.audit(m, u, 'ticket', id, action, t, n, reason || undefined);
+-            return n;
++            return portalOnly(u)?this.portalTicket(n):n;
+         });
+     }
+     async comment(u: any, id: string, b: any) { obj(b, ['texto', 'interno']); return this.tx(async (m) => { const t = await this.ticket(id, m); await this.can(u, t, 'consultar', m); this.role(u, 'solicitante', 'agente', 'aprobador'); const internal = b.interno === undefined ? false : bool(b.interno); if (internal || String(t.solicitante_id) !== u.id)
+@@ -384,7 +413,7 @@ export class DeskService {
+     async location(u: any, b: any, id?: string) { this.admin(u); obj(b, ['nombre', 'activo']); return this.tx(async (m) => { const old = id ? await this.one('SELECT * FROM ubicacion WHERE id=$1', [requireId(id)], m) : null; if (id && !old)
+         throw new NotFoundException(); const name = text(b.nombre ?? old?.nombre, 'nombre', 300), active = b.activo === undefined ? (old?.activo ?? true) : bool(b.activo); if (!active && id && await this.one('SELECT 1 FROM ci WHERE ubicacion_id=$1 AND activo', [id], m))
+         bad('Ubicación con CI activos'); const n = id ? await this.one('UPDATE ubicacion SET nombre=$1,activo=$2 WHERE id=$3 RETURNING *', [name, active, id], m) : await this.one('INSERT INTO ubicacion(nombre,activo) VALUES($1,$2) RETURNING *', [name, active], m); await this.audit(m, u, 'ubicacion', n.id, 'guardar', old, n); return n; }); }
+-    async cis(u: any, q: any = {}) { const page = positive(q.pagina ?? 1, 'pagina'), limit = positive(q.limite ?? 20, 'limite', 100), args: any[] = []; const where: string[] = []; for (const f of ['clase_id', 'ubicacion_id', 'responsable_id', 'estado'])
++    async cis(u: any, q: any = {}) { if(portalOnly(u))throw new ForbiddenException('Módulo operativo no disponible para solicitantes'); const page = positive(q.pagina ?? 1, 'pagina'), limit = positive(q.limite ?? 20, 'limite', 100), args: any[] = []; const where: string[] = []; for (const f of ['clase_id', 'ubicacion_id', 'responsable_id', 'estado'])
+         if (q[f]) {
+             args.push(q[f]);
+             where.push(`c.${f}=$${args.length}`);
+@@ -409,7 +438,7 @@ export class DeskService {
+         for (const sid of new Set(b.servicio_ids))
+             await this.q('INSERT INTO ci_servicio VALUES($1,$2)', [n.id, sid], m);
+     } await this.audit(m, u, 'ci', n.id, 'guardar', old, n); return n; }); }
+-    async ciDetail(u: any, id: string) {
++    async ciDetail(u: any, id: string) { if(portalOnly(u))throw new ForbiddenException('Módulo operativo no disponible para solicitantes');
+         const ci = await this.one('SELECT * FROM ci WHERE id=$1', [requireId(id)]);
+         if (!ci)
+             throw new NotFoundException();
+@@ -433,7 +462,7 @@ export class DeskService {
+         if (!await this.one('SELECT 1 FROM ci WHERE id=$1 AND activo', [x], m))
+             bad('CI inexistente o inactivo'); if (b.tipo !== 'conectado_a' && await this.one(`WITH RECURSIVE walk(id) AS (SELECT $1::bigint UNION SELECT r.destino_id FROM ci_relacion r JOIN walk w ON r.origen_id=w.id WHERE r.tipo IN ('depende_de','alojado_en')) SELECT 1 FROM walk WHERE id=$2`, [dest, id], m))
+         bad('Ciclo de dependencias no permitido'); await this.q('INSERT INTO ci_relacion VALUES($1,$2,$3) ON CONFLICT DO NOTHING', [id, dest, b.tipo], m); await this.audit(m, u, 'ci', id, 'relacionar', null, b); return { ok: true }; }); }
+-    async dashboard(u: any) {
++    async dashboard(u: any) { if(portalOnly(u))throw new ForbiddenException('Módulo operativo no disponible para solicitantes');
+         const first = await this.tickets(u, { limite: 100 }), ids: string[] = [];
+         for (let page = 1; page <= Math.ceil(first.total / 100); page++)
+             ids.push(...(page === 1 ? first : await this.tickets(u, { limite: 100, pagina: page })).items.map(t => String(t.id)));
+diff --git a/backend/src/desk/seed.ts b/backend/src/desk/seed.ts
+index 4633dac..654146b 100644
+--- a/backend/src/desk/seed.ts
++++ b/backend/src/desk/seed.ts
+@@ -13,7 +13,7 @@ export async function prepareDesk(db: DataSource, desk: DeskService, seed = '202
+     if (!admins[0])
+         throw new Error('Ejecute seed:demo');
+     const admin = { ...admins[0], rol: 'administrador', roles: ['administrador'] };
+-    for (const [name, roles] of [['solicitante', ['solicitante']], ['agente1', ['agente']], ['agente2', ['agente']], ['aprobador', ['aprobador']]] as [
++    for (const [name, roles] of [['solicitante', ['solicitante']], ['solicitante2', ['solicitante']], ['agente1', ['agente']], ['agente2', ['agente']], ['aprobador', ['aprobador']]] as [
+         string,
+         string[]
+     ][]) {
+@@ -26,7 +26,7 @@ export async function prepareDesk(db: DataSource, desk: DeskService, seed = '202
+         for (const role of roles)
+             await q('INSERT INTO usuario_rol VALUES($1,$2) ON CONFLICT DO NOTHING', [id, role]);
+     }
+-    const users = await q("SELECT id::text,nombre_usuario,rol FROM usuario WHERE nombre_usuario IN ('admin','solicitante','agente1','agente2','aprobador')");
++    const users = await q("SELECT id::text,nombre_usuario,rol FROM usuario WHERE nombre_usuario IN ('admin','solicitante','solicitante2','agente1','agente2','aprobador')");
+     const ids = Object.fromEntries(users.map((u: any) => [u.nombre_usuario, u.id]));
+     for (const process of Object.keys(FLOWS))
+         for (const level of (process === 'incidentes' ? [1, 2] : [1])) {
+diff --git a/backend/tests/desk.test.cjs b/backend/tests/desk.test.cjs
+index c8a4ffd..87532af 100644
+--- a/backend/tests/desk.test.cjs
++++ b/backend/tests/desk.test.cjs
+@@ -13,7 +13,8 @@ test('Service Desk: fuentes originales, API y PostgreSQL aislado',async t=>{
+   await t.test('P01: autenticación y consulta sin permisos de escritura',async()=>{assert.equal((await api('/desk/tickets','GET',undefined,'none')).status,401);assert.equal((await api('/desk/colas','POST',{},'consulta')).status,403);});
+   await t.test('P02: catálogo 12/46 repetible con incidencias originales',async()=>{const first=await api('/importaciones','POST');assert.equal(first.status,201);assert.deepEqual(first.body.control,{nivel1:12,nivel2:46});assert.ok(first.body.observaciones.some(x=>x.codigo==='SE.12'));const second=await api('/importaciones','POST');assert.equal(second.body.creados.nivel2,0);});
+   let seeded;await t.test('P03: 5000 dispositivos, 37 tickets, repetición sin duplicar',async()=>{seeded=await seedTickets(source,desk,'TEST5000',5000);let n=(await source.query("SELECT count(*)::int n FROM ci WHERE conjunto='seed:TEST5000'"))[0].n;assert.equal(n,5000);await seedTickets(source,desk,'TEST5000',5000);assert.equal((await source.query("SELECT count(*)::int n FROM ci WHERE conjunto='seed:TEST5000'"))[0].n,5000);assert.equal((await source.query('SELECT count(*)::int n FROM ticket WHERE demo_clave IS NOT NULL'))[0].n,37);});
+-  const users={};for(const name of ['solicitante','agente1','agente2','aprobador'])users[name]=await login(name);const bootstrap=(await api('/desk/bootstrap')).body,queues=bootstrap.colas,service=bootstrap.servicios[0].id,ci=(await api('/desk/ci?limite=3')).body.items.map(c=>String(c.id));
++  const users={};for(const name of ['solicitante','solicitante2','agente1','agente2','aprobador'])users[name]=await login(name);const bootstrap=(await api('/desk/bootstrap')).body,queues=bootstrap.colas,service=bootstrap.servicios[0].id,ci=(await api('/desk/ci?limite=3')).body.items.map(c=>String(c.id));
++  await source.query('UPDATE ci SET responsable_id=$1 WHERE id=$2',[users.solicitante.id,ci[0]]);
+   const payload=(p,d={})=>({titulo:'Prueba '+p,descripcion:'Caso de integración',servicio_id:service,cola_id:String(queues.find(c=>c.proceso===p&&c.nivel===1).id),ci_ids:[ci[0]],prioridad:p==='incidentes'?2:2,detalle:p==='incidentes'?{categoria:'I1',afectacion:'interrupcion',redundancia:false,...d}:p==='eventos'?{categoria:'E2',...d}:p==='accesos'?{beneficiario_id:users.solicitante.id,recurso:'Portal',permiso:'Lectura',operacion:'provision',...d}:d});
+   const create=async(p,d={})=>{const r=await api('/desk/tickets','POST',payload(p,d),'solicitante');assert.equal(r.status,201,JSON.stringify(r.body));return String(r.body.id);};
+   await t.test('P04: clasificación con origen, rechazo de ciclos y padres inexistentes',async()=>{const a=await api('/desk/clases','POST',{codigo:'T-A',nombre:'A'}),b=await api('/desk/clases','POST',{codigo:'T-B',nombre:'B',padre_id:String(a.body.id)});assert.equal(b.status,201);assert.equal((await api('/desk/clases/'+a.body.id,'PATCH',{padre_id:String(b.body.id)})).status,400);assert.equal((await api('/desk/clases','POST',{codigo:'BAD',nombre:'B',padre_id:'9999999'})).status,400);assert.ok(bootstrap.clases.some(c=>c.origen==='CMDB!C5'));});
+@@ -49,6 +50,33 @@ test('Service Desk: fuentes originales, API y PostgreSQL aislado',async t=>{
+    assert.equal((await api('/desk/tickets/'+made.body.id,'GET',undefined,'agente2')).status,403);
+    assert.equal((await api('/desk/tickets/'+made.body.id,'GET',undefined,'agente1')).status,200);
+   });
++  await t.test('Portal: segundo solicitante aislado, incluso con permiso de cola accidental',async()=>{
++   const initial=await api('/desk/tickets','GET',undefined,'solicitante2');assert.equal(initial.status,200);assert.equal(initial.body.total,0);
++   const mine=await create('servicios');
++   const theirs=await api('/desk/tickets','POST',{...payload('servicios'),ci_ids:[],sin_ci_motivo:'Consulta administrativa'},'solicitante2');assert.equal(theirs.status,201);const other=String(theirs.body.id);
++   assert.equal((await api('/desk/tickets/'+mine,'GET',undefined,'solicitante2')).status,403);
++   assert.equal((await api('/desk/tickets/'+other,'GET',undefined,'solicitante')).status,403);
++   await source.query("INSERT INTO cola_permiso(cola_id,usuario_id,permisos) VALUES($1,$2,ARRAY['consultar'])",[payload('servicios').cola_id,users.solicitante2.id]);
++   assert.equal((await api('/desk/tickets/'+mine,'GET',undefined,'solicitante2')).status,403);
++   const list=await api('/desk/tickets?limite=100','GET',undefined,'solicitante2');assert.equal(list.body.total,1);assert.equal(String(list.body.items[0].id),other);assert.equal('cola_id' in list.body.items[0],false);
++   const filter=await api('/desk/tickets?buscar='+mine,'GET',undefined,'solicitante2');assert.ok(filter.body.items.every(x=>String(x.id)!==mine));
++   for(const suffix of ['comentarios','adjuntos','accion']){const b=suffix==='comentarios'?{texto:'Ajeno'}:suffix==='accion'?{accion:'reabrir',motivo:'Ajeno'}:{nombre:'a.txt',mime:'text/plain',base64:Buffer.from('a').toString('base64')};assert.equal((await api('/desk/tickets/'+mine+'/'+suffix,'POST',b,'solicitante2')).status,403);}
++   assert.equal((await api('/desk/tickets','POST',{...payload('servicios'),solicitante_id:users.solicitante.id,ci_ids:[],sin_ci_motivo:'Ajeno'},'solicitante2')).status,403);
++  });
++  await t.test('Portal: módulos operativos bloqueados y bootstrap sin directorios internos',async()=>{
++   for(const path of ['/desk/ci','/desk/ci/'+ci[0],'/desk/colas','/desk/indicadores','/empresas','/areas','/departamentos','/secciones','/puestos','/usuarios','/servicios-nivel1','/servicios-nivel2','/catalog/status'])assert.equal((await api(path,'GET',undefined,'solicitante2')).status,403,path);
++   const b=(await api('/desk/bootstrap','GET',undefined,'solicitante2')).body;assert.equal(b.portal,true);assert.equal(b.usuarios.length,1);assert.equal(String(b.usuarios[0].id),users.solicitante2.id);assert.equal(b.clases.length,0);assert.equal(b.secciones.length,0);assert.ok(b.colas.every(c=>!('permisos' in c)&&!('responsable_id' in c)&&!('nivel' in c)));
++   assert.equal((await api('/desk/ci-opciones','GET',undefined,'solicitante2')).body.items.length,0);
++   assert.equal((await api('/desk/tickets','POST',payload('servicios'),'solicitante2')).status,403);
++   const opts=await api('/desk/ci-opciones','GET',undefined,'solicitante');assert.ok(opts.body.items.some(x=>x.id===ci[0]));assert.ok(opts.body.items.every(x=>!('atributos' in x)));
++  });
++  await t.test('Portal: seguimiento público no filtra snapshots ni notas de atención',async()=>{
++   const id=await create('servicios');await api('/desk/tickets/'+id,'PATCH',{detalle:{riesgo:'SOLO_AGENTE_NO_PUBLICAR'}},'agente1');
++   await api('/desk/tickets/'+id+'/comentarios','POST',{texto:'NOTA_INTERNA_NO_PUBLICAR',interno:true},'agente1');
++   await api('/desk/tickets/'+id+'/comentarios','POST',{texto:'Respuesta para el solicitante'},'agente1');
++   const r=await api('/desk/tickets/'+id,'GET',undefined,'solicitante');assert.equal(r.status,200);assert.equal('detalle' in r.body,false);assert.equal('cola_id' in r.body,false);assert.equal('riesgo' in (r.body.detalle||{}),false);assert.ok(!JSON.stringify(r.body).includes('SOLO_AGENTE_NO_PUBLICAR'));assert.ok(!JSON.stringify(r.body).includes('NOTA_INTERNA_NO_PUBLICAR'));assert.ok(r.body.comentarios.some(c=>c.texto==='Respuesta para el solicitante'));assert.equal(r.body.transiciones.length,0);
++   assert.equal((await api('/desk/tickets/'+id,'GET',undefined,'agente1')).body.detalle.riesgo,'SOLO_AGENTE_NO_PUBLICAR');
++  });
+   await t.test('Logout impide reutilización de token',async()=>{assert.equal((await api('/auth/logout','POST',undefined,'solicitante')).status,204);assert.equal((await api('/desk/tickets','GET',undefined,'solicitante')).status,401);});
+   console.log('P18: requiere Docker real; no sustituido por PGlite.');
+  }finally{if(app)await app.close();else if(source.isInitialized)await source.destroy();}
+diff --git a/docs/PARCHE_PORTAL_SOLICITANTE.md b/docs/PARCHE_PORTAL_SOLICITANTE.md
+new file mode 100644
+index 0000000..f88786a
+--- /dev/null
++++ b/docs/PARCHE_PORTAL_SOLICITANTE.md
+@@ -0,0 +1,62 @@
++# Corrección incremental: portal, solicitante2 y paneles
++
++Fecha: 29/10/2026. Aplicar DESPUÉS de service-desk-ampliacion-202211515.patch. No volver a aplicar el parche inicial. No requiere borrar volúmenes ni migración nueva.
++
++## Aplicación en PowerShell
++
++Desde la raíz del repositorio, con este parche descargado allí:
++
++```powershell
++git apply --check .\service-desk-portal-solicitantes-paneles.patch
++git apply .\service-desk-portal-solicitantes-paneles.patch
++docker compose up --build -d --wait --wait-timeout 180
++docker compose exec -T nestjs-backend npm run seed:desk
++```
++
++El seed agrega la cuenta solicitante2 y conserva cuentas/tickets/dispositivos existentes. Su contraseña usa DEMO_DESK_PASSWORD de .env (predeterminado SA_desk_2026_demo). Correo solicitante2@demo.local. El nuevo usuario empieza sin tickets: no se le asigna el conjunto DEMO del primer solicitante.
++
++Cierre sesión y vuelva a entrar; recargue con Ctrl+F5 para utilizar los archivos nuevos del frontend. Si git apply --check indica conflictos, no fuerce: conserve sus cambios y comparta el mensaje. --check no modifica archivos.
++
++## Qué cambia en permisos
++
++Un usuario con rol adicional solicitante, sin agente/aprobador y sin administrador es un usuario de portal. Su rol base consulta se conserva por compatibilidad, pero no concede acceso al resto del catálogo. La cuenta consulta pura conserva lectura funcional del enunciado. Quien recibe agente o aprobador explícitos conserva las funciones de esos roles, sujetas a colas.
++
++| Recurso | Solicitante de portal |
++|---|---|
++| Tickets | Solo aquellos cuyo solicitante_id es el suyo, incluso ante concesiones accidentales de lectura por cola |
++| Alta | Para sí mismo; no puede suplantar otro solicitante |
++| Comentarios/adjuntos | Solo sus casos, comentarios públicos y descargas autorizadas |
++| Seguimiento | Estados y mensajes públicos; sin detalle de atención ni snapshots completos de auditoría |
++| CMDB / dependencias / atributos | Denegado, incluso mediante GET directo |
++| Selector de dispositivos | Solo código/nombre de CI activos de los que es responsable; sin inventario completo |
++| Catálogo / organización / usuarios | Módulos denegados; bootstrap entrega únicamente servicios disponibles y referencia de cola para crear |
++| Indicadores / configuración de colas | Denegado |
++| FAQ / autoservicio | Lectura |
++
++No basta ocultar pestañas. Guard global, consultas de lista, detalle, acciones y referencias limitan los datos. El bootstrap del portal no entrega permisos de colas, responsables, ubicaciones, clases ni directorio de agentes. La referencia de cola visible usa el nombre del proceso y selecciona una entrada activa por proceso; no revela soporte/escalamiento.
++
++Para un ticket sin equipo asignado, use la justificación sin CI. No se concede acceso a todo el inventario por crear un ticket. Un agente autorizado puede crear casos para otra persona y gestionar referencias según sus permisos; esto no eleva al solicitante.
++
++## Diseño
++
++Nuevo ticket y Abrir se despliegan en un panel lateral sobre el listado, con fondo atenuado y desplazamiento propio. El formulario no aparece al final de la página. Botón Cerrar, clic fuera y Escape permiten volver; durante guardado se evita cierre accidental. El diálogo nativo contiene foco y devuelve foco al botón anterior. Se adapta a ancho completo en móvil y respeta movimiento reducido.
++
++El solicitante ve Mis tickets / Autoservicio y el encabezado con su perfil efectivo. Sus formularios muestran datos que aporta al solicitar, sin campos de solución, aprobación, investigación o provisión del agente. El agente conserva los campos de atención y acciones dentro del mismo panel. Los errores aparecen dentro del panel, no ocultos detrás del fondo.
++
++## Prueba con dos solicitantes
++
++1. Ingrese solicitante2 / contraseña configurada: Mis tickets debe estar vacío. Solo verá Mis tickets y Autoservicio; no CMDB, Indicadores ni Catálogo y organización.
++2. Cree un ticket de Servicios con título único, servicio de referencia y justificación sin CI. Anote el número. Debe verlo en su lista.
++3. Cierre sesión. Ingrese solicitante: no debe ver ese ticket. Sus aproximadamente 39/40 casos anteriores pueden seguir apareciendo porque el seed los asignó al primer solicitante.
++4. Pruebe también al revés: un caso creado por solicitante no aparece a solicitante2. Las solicitudes directas de detalle, comentarios, adjuntos y acciones sobre el caso ajeno devuelven 403.
++5. Agente1 puede atender el caso en su cola; agregue comentario público y nota interna. Solicitante2 verá solo el público en su propio caso.
++6. Abra Nuevo ticket y luego un ticket existente. Ambos deben desplegar el panel inmediatamente, sin bajar en la página. Cierre con Escape y botón Cerrar.
++
++## Verificación realizada
++
++- Compilación backend y frontend: salida 0.
++- Suite Service Desk: 24 pruebas aprobadas, incluyendo tres grupos nuevos de aislamiento y reducción de datos.
++- Regresión del parcial: 23 aprobadas. Total reportado por Node: 47 (incluye contenedoras).
++- Se prueba concesión accidental de lectura por cola sin romper aislamiento; detalle/notas/snapshots, suplantación de solicitante, CI ajeno y bloqueo de módulos directos.
++- Evidencias: docs/evidencias/portal-seguridad.txt, portal-regresion.txt, build-portal.txt y build-ui-panel.txt.
++- No se dispone de Docker ni navegador ejecutable en el entorno de generación. Comprobación visual final y arranque Docker se confirman en el equipo del usuario. No se declaran ejecutados aquí.
+diff --git a/docs/PROCESOS.md b/docs/PROCESOS.md
+index 5fc15b4..5051f4f 100644
+--- a/docs/PROCESOS.md
++++ b/docs/PROCESOS.md
+@@ -1,3 +1,5 @@
++> **Política actualizada del portal:** [PARCHE_PORTAL_SOLICITANTE.md](PARCHE_PORTAL_SOLICITANTE.md). Solicitante sin funciones operativas: solo casos propios y ayuda; no obtiene lectura de colas por pertenencia ni lectura global por su rol base.
++
+ # Procesos, permisos y relojes
+ 
+ ## Identidades
+diff --git a/docs/PRUEBAS.md b/docs/PRUEBAS.md
+index 030578f..7824d32 100644
+--- a/docs/PRUEBAS.md
++++ b/docs/PRUEBAS.md
+@@ -46,3 +46,7 @@ Frontend compilado; no hay navegador en este entorno y su descarga falló. Por e
+ ## Resultado final
+ 
+ 23 pruebas del parcial y 21 de Service Desk aprobadas (44 en total, conteo del ejecutor Node). Fuente validada: `46b07e9e7cf75d9351a399dcbf2ecec0645ef6f3`. Compilaciones backend/frontend con salida 0. Detalles exactos en evidencias/VALIDACION_FINAL.json. El conteo incluye las pruebas contenedoras de cada suite.
++
++## Corrección del portal — 29/10/2026
++
++24 tests Service Desk y 23 de regresión aprobados. Tres nuevos grupos verifican aislamiento con solicitante2, denegación de módulos y ausencia de detalles/notas internas en seguimiento. Ver portal-seguridad.txt y portal-regresion.txt. Compilaciones backend/frontend aprobadas; panel lateral compilado, recorrido visual pendiente en navegador.
+diff --git a/docs/contexto/008_portal_solicitantes.md b/docs/contexto/008_portal_solicitantes.md
+new file mode 100644
+index 0000000..0dd1e20
+--- /dev/null
++++ b/docs/contexto/008_portal_solicitantes.md
+@@ -0,0 +1,2 @@
++# Aislamiento del portal — 29/10/2026
++El usuario detectó exposición de módulos internos en el perfil solicitante. Se restringe a casos propios y datos de creación mínimos en frontend y servidor; pertenencia a cola no amplía su lectura. Consulta pura conserva sus requisitos previos. Multirol agente/aprobador es explícito y mantiene sus funciones. Se agrega solicitante2 sin tickets DEMO para demostrar separación de identidades. Panel lateral nativo dialog evita formularios al pie del listado y conserva campos operativos fuera del portal. Tests incluyen dos identidades, permisos de cola accidentales, referencias CI, módulos y snapshots. No se modifica esquema ni se borra información existente.
+diff --git a/docs/evidencias/build-portal.txt b/docs/evidencias/build-portal.txt
+new file mode 100644
+index 0000000..6b80cbc
+--- /dev/null
++++ b/docs/evidencias/build-portal.txt
+@@ -0,0 +1,4 @@
++npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
++
++> catalogo-ti-backend@0.3.0 build
++> tsc -p tsconfig.json
+diff --git a/docs/evidencias/build-ui-panel.txt b/docs/evidencias/build-ui-panel.txt
+new file mode 100644
+index 0000000..ba67b26
+--- /dev/null
++++ b/docs/evidencias/build-ui-panel.txt
+@@ -0,0 +1,14 @@
++npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
++
++> catalogo-ti-frontend@0.3.0 build
++> vite build
++
++vite v7.3.6 building client environment for production...
++transforming...
++✓ 31 modules transformed.
++rendering chunks...
++computing gzip size...
++dist/index.html                   0.38 kB │ gzip:  0.27 kB
++dist/assets/index-CaPIhnPE.css    5.13 kB │ gzip:  1.82 kB
++dist/assets/index-BnhpjQH6.js   237.03 kB │ gzip: 73.02 kB
++✓ built in 717ms
+diff --git a/docs/evidencias/portal-regresion.txt b/docs/evidencias/portal-regresion.txt
+new file mode 100644
+index 0000000..ada1a4d
+--- /dev/null
++++ b/docs/evidencias/portal-regresion.txt
+@@ -0,0 +1,43 @@
++npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
++
++> catalogo-ti-backend@0.3.0 test:embedded
++> node --test tests/embedded.test.cjs
++
++Cuenta creada: admin
++Cuenta creada: consulta
++Cuenta existente conservada: admin
++Cuenta existente conservada: consulta
++▶ Integración: NestJS, TypeORM y PostgreSQL embebido; archivo original
++  ✔ Seed demo reproducible: dos roles, hashes y sin duplicados (1373.047664ms)
++  ✔ Hash con sal distinta, verificación y límite de 72 bytes (996.056388ms)
++  ✔ P01: login por usuario/correo y credenciales inválidas (1056.058193ms)
++  ✔ P02: sin token, firma alterada, expiración y usuario desactivado (20.908169ms)
++  ✔ P03: consulta lee, escritura administrativa rechazada (21.458911ms)
++  ✔ P02: logout revoca JWT y bloquea su reutilización (8.918417ms)
++  ✔ P04 parcial: jerarquía completa recuperable en DB (8.561998ms)
++  ✔ P05 parcial: unicidad y FK rechazadas en DB (2.584208ms)
++  ✔ P09 parcial: umbrales inválidos rechazados y NULL conservado (1.879142ms)
++  ✔ P11 parcial: responsabilidad y traslados coherentes en DB (5.188336ms)
++  ✔ P03: consulta rechazada en CRUD e importación reales; hashes no expuestos (30.78044ms)
++  ✔ P04/P05: jerarquía por API, duplicados, FK, actualización y bajas protegidas (475.275242ms)
++  ✔ P09: crear y editar umbrales, NULL y sección obligatoria (72.727705ms)
++  ✔ P10: búsqueda, filtros, paginación y ficha completa (29.301275ms)
++  ✔ P11: usuario ajeno rechazado; asignación, traslado y baja protegidos (102.16619ms)
++  ✔ P06: original, 12/46, hash y auditoría completa (548.72203ms)
++  ✔ P07: repetir sin duplicar ni actualizar, trazabilidad (328.94298ms)
++  ✔ P08: SE.12 canónico, dos nombres, prefijo y NULL reales (17.285144ms)
++  ✔ P10: filtros de clase, criticidad, tipo, estado y nivel1 (25.861906ms)
++Asignaciones de demostración: 3 creadas; asignaciones previas conservadas.
++Asignaciones de demostración: 0 creadas; asignaciones previas conservadas.
++  ✔ Etiquetas: modificación auditada, mapeo e identidad preservada al reimportar (306.760653ms)
++  ✔ Datos demo: al menos tres asignaciones válidas e idempotentes (9.327575ms)
++  ✔ Reimportación conserva correcciones manuales y responsables (359.054408ms)
++✔ Integración: NestJS, TypeORM y PostgreSQL embebido; archivo original (9021.708913ms)
++ℹ tests 23
++ℹ suites 0
++ℹ pass 23
++ℹ fail 0
++ℹ cancelled 0
++ℹ skipped 0
++ℹ todo 0
++ℹ duration_ms 9720.57169
+diff --git a/docs/evidencias/portal-seguridad.txt b/docs/evidencias/portal-seguridad.txt
+new file mode 100644
+index 0000000..aef5282
+--- /dev/null
++++ b/docs/evidencias/portal-seguridad.txt
+@@ -0,0 +1,104 @@
++npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
++
++> catalogo-ti-backend@0.3.0 test:desk
++> node --test tests/desk.test.cjs
++
++Cuenta creada: admin
++Cuenta creada: consulta
++▶ Service Desk: fuentes originales, API y PostgreSQL aislado
++  ✔ P01: autenticación y consulta sin permisos de escritura (9.801553ms)
++  ✔ P02: catálogo 12/46 repetible con incidencias originales (744.338447ms)
++{
++  "semilla": "TEST5000",
++  "conjunto": "seed:TEST5000",
++  "conteo_generados": 5000,
++  "por_categoria": [
++    {
++      "codigo": "HW",
++      "cantidad": 1
++    },
++    {
++      "codigo": "SW",
++      "cantidad": 0
++    },
++    {
++      "codigo": "HW-SRV",
++      "cantidad": 1686
++    },
++    {
++      "codigo": "HW-PC",
++      "cantidad": 1613
++    },
++    {
++      "codigo": "HW-NET",
++      "cantidad": 1701
++    }
++  ],
++  "observaciones": [
++    "Jerarquía extendida es decisión del proyecto, pendiente validación docente"
++  ]
++}
++Tickets demo conservados/creados: mínimo 37; no se sobrescriben ediciones de evaluación.
++{
++  "semilla": "TEST5000",
++  "conjunto": "seed:TEST5000",
++  "conteo_generados": 5000,
++  "por_categoria": [
++    {
++      "codigo": "HW",
++      "cantidad": 1
++    },
++    {
++      "codigo": "SW",
++      "cantidad": 0
++    },
++    {
++      "codigo": "HW-SRV",
++      "cantidad": 1686
++    },
++    {
++      "codigo": "HW-PC",
++      "cantidad": 1613
++    },
++    {
++      "codigo": "HW-NET",
++      "cantidad": 1701
++    }
++  ],
++  "observaciones": [
++    "Jerarquía extendida es decisión del proyecto, pendiente validación docente"
++  ]
++}
++Tickets demo conservados/creados: mínimo 37; no se sobrescriben ediciones de evaluación.
++  ✔ P03: 5000 dispositivos, 37 tickets, repetición sin duplicar (2943.522834ms)
++  ✔ P04: clasificación con origen, rechazo de ciclos y padres inexistentes (54.068655ms)
++  ✔ P05: referencias válidas/inválidas, servicio N1 derivado y condición sin CI (46.089139ms)
++  ✔ P06: permiso por usuario, rol y consulta sin elevación (39.816975ms)
++  ✔ P07: dos agentes toman simultáneamente; solo uno obtiene asignación (62.095849ms)
++  ✔ P08: transferencia y escalamiento con motivo y proceso validado (29.747933ms)
++  ✔ P09/P10: siete rutas completas; cambios sin aprobación y autoaprobación rechazados (744.619977ms)
++  ✔ P11: E0–E3 e incidente idempotente al reabrir evento (397.865136ms)
++  ✔ P12: I0–I6 y regla complementaria de duraciones (11.28799ms)
++  ✔ P13: vínculo incidente–problema–cambio recuperable (20.472441ms)
++  ✔ P14: dependencias CI/servicios, ciclos técnicos según tipo (46.61908ms)
++  ✔ P15: cierre sin resolución, reapertura, bitácora y notas internas (47.419527ms)
++  ✔ Adjuntos: firma, límites, descarga autorizada e interna (34.622363ms)
++{"prueba":"P16","entorno":"Node v24.22.1, PGlite WASM, HTTP local","ms":50.79733599999963,"registros":5000}
++  ✔ P16: filtros y paginación de 5000 dispositivos con tiempo observado (51.04952ms)
++  ✔ P17: objetivos con abiertos, primera atención, pausas y reaperturas (39.312207ms)
++  ✔ Bajas protegidas de usuarios y colas con casos abiertos (20.565693ms)
++  ✔ Seguridad: campos de aprobación reservados y acceso fuera de cola (41.750879ms)
++  ✔ Portal: segundo solicitante aislado, incluso con permiso de cola accidental (118.167057ms)
++  ✔ Portal: módulos operativos bloqueados y bootstrap sin directorios internos (79.540652ms)
++  ✔ Portal: seguimiento público no filtra snapshots ni notas de atención (61.359037ms)
++P18: requiere Docker real; no sustituido por PGlite.
++  ✔ Logout impide reutilización de token (7.767909ms)
++✔ Service Desk: fuentes originales, API y PostgreSQL aislado (9647.697471ms)
++ℹ tests 24
++ℹ suites 0
++ℹ pass 24
++ℹ fail 0
++ℹ cancelled 0
++ℹ skipped 0
++ℹ todo 0
++ℹ duration_ms 10326.916897
+diff --git a/frontend/src/Desk.jsx b/frontend/src/Desk.jsx
+index dd20c0b..d50006d 100644
+--- a/frontend/src/Desk.jsx
++++ b/frontend/src/Desk.jsx
+@@ -1,3 +1,4 @@
++import TicketPanel from './TicketPanel';
+ import React,{useState,useEffect} from 'react';
+ const labels={nuevos:'Nuevos servicios',cambios:'Cambios',incidentes:'Incidentes',eventos:'Eventos',problemas:'Problemas',accesos:'Accesos',servicios:'Servicios de tecnología'};
+ const fields={
+@@ -13,13 +14,15 @@ const date=x=>x?new Date(x).toLocaleString():'—';
+ export default function Desk({request,session}){
+  const [view,setView]=useState('tickets'),[boot,setBoot]=useState(null),[data,setData]=useState({items:[],total:0}),[filters,setFilters]=useState({}),[page,setPage]=useState(1),[refresh,setRefresh]=useState(0),[error,setError]=useState(''),[busy,setBusy]=useState(false),[selected,setSelected]=useState(null),[form,setForm]=useState(null),[details,setDetails]=useState({}),[note,setNote]=useState(''),[internal,setInternal]=useState(false),[reason,setReason]=useState(''),[resolution,setResolution]=useState(''),[target,setTarget]=useState(''),[agent,setAgent]=useState(''),[linkId,setLinkId]=useState(''),[relation,setRelation]=useState('relacionado'),[stats,setStats]=useState(null),[ciOptions,setCiOptions]=useState([]),[ciSearch,setCiSearch]=useState(''),[queuePerms,setQueuePerms]=useState([]);
+  const roles=session.user.roles||[session.user.rol],admin=session.user.rol==='administrador',worker=admin||roles.includes('agente'),approver=admin||roles.includes('aprobador'),requester=admin||roles.includes('solicitante');
++ const portal=requester&&!worker&&!approver;
++ const closeTicket=()=>{setSelected(null);setForm(null);setError('');};
+  const run=async fn=>{setBusy(true);setError('');try{await fn();setRefresh(n=>n+1);}catch(e){setError(e.message);}finally{setBusy(false);}};
+  const send=(path,b,method='POST')=>request('/desk'+path,{method,body:JSON.stringify(b)});
+  useEffect(()=>{request('/desk/bootstrap').then(setBoot).catch(e=>setError(e.message));},[refresh,request]);
+  useEffect(()=>{let gone=false;setError('');async function load(){if(['tickets','ci'].includes(view)){const q=new URLSearchParams({pagina:page,limite:20,...Object.fromEntries(Object.entries(filters).filter(([,v])=>v!==''))});const r=await request(`/desk/${view}?${q}`);if(!gone)setData(r);}else if(view==='indicadores'){const r=await request('/desk/indicadores');if(!gone)setStats(r);}else if(view==='faq'){const r=await request('/desk/faq');if(!gone)setData({items:r,total:r.length});}}load().catch(e=>setError(e.message));return()=>{gone=true;};},[view,filters,page,refresh,request]);
+- useEffect(()=>{let gone=false;request('/desk/ci?limite=30&buscar='+encodeURIComponent(ciSearch)).then(r=>{if(!gone)setCiOptions(r.items);}).catch(()=>{});return()=>{gone=true;};},[ciSearch,refresh,request]);
++ useEffect(()=>{let gone=false;request('/desk/ci-opciones?limite=30&buscar='+encodeURIComponent(ciSearch)).then(r=>{if(!gone)setCiOptions(r.items);}).catch(()=>{});return()=>{gone=true;};},[ciSearch,refresh,request]);
+  const nav=v=>{setView(v);setSelected(null);setForm(null);setFilters({});setPage(1);setError('');};
+- const open=async id=>{const item=await request(`/desk/${view==='ci'?'ci':'tickets'}/${id}`);setSelected(item);setForm(null);setDetails(item.detalle||{});setReason('');setResolution('');};
++ const open=async id=>{const item=await request(`/desk/${view==='ci'?'ci':'tickets'}/${id}`);setSelected(item);setForm(null);setDetails(item.detalle||{});setReason('');setResolution('');setNote('');setInternal(false);setTarget('');setAgent('');setLinkId('');};
+  const update=(k,v)=>setForm(p=>({...p,[k]:v}));
+  const filter=(k,v)=>{setFilters(p=>({...p,[k]:v}));setPage(1);};
+  const options=(items,label='nombre')=>(items||[]).map(x=><option key={x.id} value={x.id}>{x.codigo?x.codigo+' · ':''}{x[label]}</option>);
+@@ -29,28 +32,28 @@ export default function Desk({request,session}){
+   {process==='incidentes'&&<><label>Categoría<select value={d.categoria||'I0'} onChange={e=>{const map=boot.incidentes.find(x=>x.categoria===e.target.value);set({...d,categoria:e.target.value,redundancia:map.redundancia});if(form)update('prioridad',map.prioridad);}}>{boot.incidentes.map(x=><option key={x.categoria}>{x.categoria}</option>)}</select></label><label>Afectación<select value={d.afectacion||'sin_interrupcion'} onChange={e=>set({...d,afectacion:e.target.value})}>{['sin_interrupcion','interrupcion','degradacion','seguridad'].map(x=><option key={x}>{x}</option>)}</select></label><label>Redundancia disponible<select value={String(d.redundancia??true)} onChange={e=>set({...d,redundancia:e.target.value==='true'})}><option value="true">Sí</option><option value="false">No</option></select></label></>}
+   {process==='eventos'&&<label>Categoría<select value={d.categoria||'E0'} onChange={e=>set({...d,categoria:e.target.value})}>{['E0','E1','E2','E3'].map(x=><option key={x}>{x}</option>)}</select></label>}
+   {process==='accesos'&&<><label>Beneficiario<select value={d.beneficiario_id||session.user.id} onChange={e=>set({...d,beneficiario_id:e.target.value})}>{options(boot.usuarios)}</select></label><label>Operación<select value={d.operacion||'provision'} onChange={e=>set({...d,operacion:e.target.value})}><option value="provision">Provisión</option><option value="revocacion">Revocación</option></select></label></>}
+-  {(fields[process]||[]).map(([k,label,type])=><label key={k}>{label}{['nivel1_id','seccion_id','servicio_vinculado_id'].includes(k)?<select value={d[k]||''} onChange={e=>set({...d,[k]:e.target.value})}><option value="">Seleccionar</option>{options(k==='nivel1_id'?boot.niveles1:k==='seccion_id'?boot.secciones:boot.servicios)}</select>:type==='number'?<input type="number" min="0" step="any" value={d[k]??''} onChange={e=>set({...d,[k]:e.target.value===''?null:Number(e.target.value)})}/>:<textarea value={d[k]??''} onChange={e=>set({...d,[k]:e.target.value})}/>}</label>)}
++  {(fields[process]||[]).filter(([k])=>!portal||({nuevos:['necesidad','nombre_nuevo'],cambios:['impacto_cambio'],incidentes:['duracion_estimada_h','justificacion_clasificacion'],eventos:[],problemas:[],accesos:['recurso','permiso'],servicios:[]}[process]||[]).includes(k)).map(([k,label,type])=><label key={k}>{label}{['nivel1_id','seccion_id','servicio_vinculado_id'].includes(k)?<select value={d[k]||''} onChange={e=>set({...d,[k]:e.target.value})}><option value="">Seleccionar</option>{options(k==='nivel1_id'?boot.niveles1:k==='seccion_id'?boot.secciones:boot.servicios)}</select>:type==='number'?<input type="number" min="0" step="any" value={d[k]??''} onChange={e=>set({...d,[k]:e.target.value===''?null:Number(e.target.value)})}/>:<textarea value={d[k]??''} onChange={e=>set({...d,[k]:e.target.value})}/>}</label>)}
+  </div>;}
+  const newTicket=()=>{setSelected(null);setDetails({});setForm({kind:'ticket',titulo:'',descripcion:'',servicio_id:'',cola_id:'',prioridad:2,impacto:'medio',urgencia:'media',canal:'web',sin_ci_motivo:'Trámite sin dispositivo asociado',ci_ids:[]});};
+  const newCi=x=>{setSelected(null);setForm({kind:'ci',codigo:'',nombre:'',clase_id:'',ubicacion_id:'',responsable_id:session.user.id,estado:'Activo',activo:true,es_dispositivo:true,atributos:{},...x,atributosTexto:JSON.stringify(x?.atributos||{},null,2),servicio_ids:x?.servicios?.map(s=>String(s.id))||[]});};
+  const action=(accion,estado)=>run(async()=>{await send(`/tickets/${selected.id}/accion`,{accion,...(estado?{estado}:{}),motivo:reason||undefined,detalle:accion==='transicion'?Object.fromEntries(Object.entries(details).filter(([k])=>!['aprobado_por','aprobado_en','servicio_creado_id'].includes(k))):undefined,resolucion:resolution||undefined,cola_id:target||undefined,usuario_id:agent||undefined});await open(selected.id);});
+  if(!boot)return <p>Cargando Service Desk… {error}</p>;
+  const selectedProcess=form?.kind==='ticket'?boot.colas.find(c=>String(c.id)===form.cola_id)?.proceso:selected?.proceso;
+- return <div className="desk"><div className="desk-banner"><div><p className="eyebrow">MESA DE SERVICIO</p><h2>Atención y configuración</h2><p>Catálogo, personas y tecnología conectados.</p></div><span className="role-pill">{roles.filter(r=>r!=='consulta'||roles.length===1).join(' · ')}</span></div>
+- <nav className="desk-tabs">{[['tickets','Tickets'],['ci','CMDB'],['indicadores','Indicadores'],['faq','Autoservicio'],...(admin?[['colas','Colas y permisos'],['roles','Roles'],['clasificacion','Clasificación y ubicaciones']]:[])].map(([v,l])=><button key={v} className={view===v?'selected':'secondary'} onClick={()=>nav(v)}>{l}</button>)}</nav>
++ return <div className="desk"><div className="desk-banner"><div><p className="eyebrow">MESA DE SERVICIO</p><h2>{portal?'Mis solicitudes de soporte':'Atención y configuración'}</h2><p>{portal?'Crea solicitudes, consulta su seguimiento y encuentra ayuda.':'Catálogo, personas y tecnología conectados.'}</p></div><span className="role-pill">{roles.filter(r=>r!=='consulta'||roles.length===1).join(' · ')}</span></div>
++ <nav className="desk-tabs">{[['tickets',portal?'Mis tickets':'Tickets'],...(!portal?[['ci','CMDB'],['indicadores','Indicadores']]:[]),['faq','Autoservicio'],...(admin?[['colas','Colas y permisos'],['roles','Roles'],['clasificacion','Clasificación y ubicaciones']]:[])].map(([v,l])=><button key={v} className={view===v?'selected':'secondary'} onClick={()=>nav(v)}>{l}</button>)}</nav>
+  {error&&<p role="alert" className="error">{error}</p>}{busy&&<p role="status">Procesando…</p>}
+- {['tickets','ci'].includes(view)&&<section><div className="toolbar"><h2>{view==='tickets'?'Tickets de atención':'Inventario CMDB'}</h2><span>{data.total} registros</span>{view==='tickets'&&(requester||worker)&&<button onClick={newTicket}>Nuevo ticket</button>}{view==='ci'&&admin&&<button onClick={()=>newCi()}>Nuevo CI</button>}</div>
++ {['tickets','ci'].includes(view)&&<section><div className="toolbar"><h2>{view==='tickets'?(portal?'Mis tickets':'Tickets de atención'):'Inventario CMDB'}</h2><span>{data.total} registros</span>{view==='tickets'&&(requester||worker)&&<button onClick={newTicket}>Nuevo ticket</button>}{view==='ci'&&admin&&<button onClick={()=>newCi()}>Nuevo CI</button>}</div>
+  <div className="filters"><label>Buscar<input placeholder={view==='ci'?'Código o nombre':'Número o título'} value={filters.buscar||''} onChange={e=>filter('buscar',e.target.value)}/></label>
+- {view==='tickets'?<><label>Proceso<select value={filters.proceso||''} onChange={e=>filter('proceso',e.target.value)}><option value="">Todos</option>{Object.entries(labels).map(([k,v])=><option value={k} key={k}>{v}</option>)}</select></label><label>Cola<select value={filters.cola_id||''} onChange={e=>filter('cola_id',e.target.value)}><option value="">Todas</option>{options(boot.colas)}</select></label><label>Servicio<select value={filters.servicio_id||''} onChange={e=>filter('servicio_id',e.target.value)}><option value="">Todos</option>{options(boot.servicios)}</select></label><label>Estado<input value={filters.estado||''} placeholder="registrado, cerrado…" onChange={e=>filter('estado',e.target.value)}/></label><label>Prioridad<select value={filters.prioridad||''} onChange={e=>filter('prioridad',e.target.value)}><option value="">Todas</option><option value="1">Alta</option><option value="2">Media</option><option value="3">Baja</option></select></label><label>Responsable<select value={filters.responsable_id||''} onChange={e=>filter('responsable_id',e.target.value)}><option value="">Todos</option>{options(boot.usuarios)}</select></label><label>Desde<input type="date" value={filters.desde||''} onChange={e=>filter('desde',e.target.value)}/></label><label>Hasta<input type="date" value={filters.hasta||''} onChange={e=>filter('hasta',e.target.value?e.target.value+'T23:59:59':'')}/></label></>:<><label>Clasificación<select value={filters.clase_id||''} onChange={e=>filter('clase_id',e.target.value)}><option value="">Todas</option>{options(boot.clases)}</select></label><label>Ubicación<select value={filters.ubicacion_id||''} onChange={e=>filter('ubicacion_id',e.target.value)}><option value="">Todas</option>{options(boot.ubicaciones)}</select></label><label>Estado<input value={filters.estado||''} onChange={e=>filter('estado',e.target.value)}/></label><label>Responsable<select value={filters.responsable_id||''} onChange={e=>filter('responsable_id',e.target.value)}><option value="">Todos</option>{options(boot.usuarios)}</select></label></>}
+- </div><div className="table-wrap"><table><thead><tr><th>{view==='ci'?'Código':'Ticket'}</th><th>{view==='ci'?'Nombre':'Título'}</th><th>{view==='ci'?'Clasificación':'Proceso / cola'}</th><th>Estado</th><th>Responsable</th><th>Detalle</th></tr></thead><tbody>{data.items.map(x=><tr key={x.id}><td>{view==='ci'?x.codigo:'#'+x.id}</td><td>{view==='ci'?x.nombre:x.titulo}</td><td>{view==='ci'?x.clase:labels[x.proceso]+' / '+x.cola}</td><td><span className="badge">{x.estado}</span></td><td>{x.responsable||'Sin asignar'}</td><td><button className="secondary" onClick={()=>run(()=>open(x.id))}>Abrir</button></td></tr>)}</tbody></table></div><div className="toolbar"><button disabled={page===1} onClick={()=>setPage(p=>p-1)}>Anterior</button><span>Página {page} · {data.total} registros</span><button disabled={page*20>=data.total} onClick={()=>setPage(p=>p+1)}>Siguiente</button></div></section>}
+- {form?.kind==='ticket'&&<section><h2>Registrar ticket</h2><form onSubmit={e=>{e.preventDefault();run(async()=>{const {kind,...payload}=form;const t=await send('/tickets',{...payload,solicitante_id:payload.solicitante_id||undefined,detalle:details});setForm(null);await open(t.id);});}}><div className="edit">{inp('Título','titulo','text',true)}{pick('Servicio N2 de referencia','servicio_id',boot.servicios.filter(s=>s.activo!==false),true)}<label>Descripción<textarea required value={form.descripcion} onChange={e=>update('descripcion',e.target.value)}/></label><label>Cola / proceso<select required value={form.cola_id} onChange={e=>{update('cola_id',e.target.value);const p=boot.colas.find(c=>String(c.id)===e.target.value)?.proceso;setDetails(p==='incidentes'?{categoria:'I0',afectacion:'sin_interrupcion',redundancia:true}:p==='eventos'?{categoria:'E0'}:p==='accesos'?{beneficiario_id:session.user.id,operacion:'provision'}:{});if(p==='incidentes')update('prioridad',3);}}><option value="">Seleccionar</option>{options(boot.colas.filter(c=>c.activo))}</select></label>{(admin||worker)&&pick('Solicitante (vacío: yo)','solicitante_id',boot.usuarios)}<label>Prioridad<select value={form.prioridad} onChange={e=>update('prioridad',Number(e.target.value))}><option value="1">Alta</option><option value="2">Media</option><option value="3">Baja</option></select></label>{['impacto','urgencia','canal'].map(k=><label key={k}>{k}<select value={form[k]} onChange={e=>update(k,e.target.value)}>{(k==='impacto'?['bajo','medio','alto']:k==='urgencia'?['baja','media','alta']:['web','telefono','correo','monitoreo']).map(v=><option key={v}>{v}</option>)}</select></label>)}<label>Buscar dispositivos<input value={ciSearch} onChange={e=>setCiSearch(e.target.value)}/></label><label>CI afectados (Ctrl para varios)<select multiple value={form.ci_ids} onChange={e=>update('ci_ids',Array.from(e.target.selectedOptions,x=>x.value))}>{options(ciOptions)}</select></label>{!form.ci_ids.length&&inp('Justificación sin CI','sin_ci_motivo','text',true)}</div>{selectedProcess&&processFields(selectedProcess,details,setDetails)}<div className="toolbar"><button disabled={busy}>Crear ticket</button><button type="button" className="secondary" onClick={()=>setForm(null)}>Cancelar</button></div></form></section>}
+- {selected&&view==='tickets'&&<section><div className="toolbar"><h2>Ticket #{selected.id} · {selected.titulo}</h2><span className="badge">{selected.estado}</span><button className="secondary" onClick={()=>setSelected(null)}>Cerrar ficha</button></div><p>{selected.descripcion}</p><dl><dt>Servicio</dt><dd>{selected.servicio.codigo} · {selected.servicio.nombre} / {selected.servicio.nivel1}</dd><dt>Proceso</dt><dd>{labels[selected.proceso]}</dd><dt>Creado</dt><dd>{date(selected.creado_en)}</dd><dt>Resuelto / cerrado</dt><dd>{date(selected.resuelto_en)} / {date(selected.cerrado_en)}</dd><dt>Resolución</dt><dd>{selected.resolucion||'Pendiente'}</dd><dt>Dispositivos</dt><dd>{selected.ci.map(c=>c.codigo+' '+c.nombre).join(', ')||selected.sin_ci_motivo}</dd></dl>
++ {view==='tickets'?<><label>Proceso<select value={filters.proceso||''} onChange={e=>filter('proceso',e.target.value)}><option value="">Todos</option>{Object.entries(labels).map(([k,v])=><option value={k} key={k}>{v}</option>)}</select></label>{!portal&&<><label>Cola<select value={filters.cola_id||''} onChange={e=>filter('cola_id',e.target.value)}><option value="">Todas</option>{options(boot.colas)}</select></label></>}<label>Servicio<select value={filters.servicio_id||''} onChange={e=>filter('servicio_id',e.target.value)}><option value="">Todos</option>{options(boot.servicios)}</select></label><label>Estado<input value={filters.estado||''} placeholder="registrado, cerrado…" onChange={e=>filter('estado',e.target.value)}/></label><label>Prioridad<select value={filters.prioridad||''} onChange={e=>filter('prioridad',e.target.value)}><option value="">Todas</option><option value="1">Alta</option><option value="2">Media</option><option value="3">Baja</option></select></label>{!portal&&<><label>Responsable<select value={filters.responsable_id||''} onChange={e=>filter('responsable_id',e.target.value)}><option value="">Todos</option>{options(boot.usuarios)}</select></label></>}<label>Desde<input type="date" value={filters.desde||''} onChange={e=>filter('desde',e.target.value)}/></label><label>Hasta<input type="date" value={filters.hasta||''} onChange={e=>filter('hasta',e.target.value?e.target.value+'T23:59:59':'')}/></label></>:<><label>Clasificación<select value={filters.clase_id||''} onChange={e=>filter('clase_id',e.target.value)}><option value="">Todas</option>{options(boot.clases)}</select></label><label>Ubicación<select value={filters.ubicacion_id||''} onChange={e=>filter('ubicacion_id',e.target.value)}><option value="">Todas</option>{options(boot.ubicaciones)}</select></label><label>Estado<input value={filters.estado||''} onChange={e=>filter('estado',e.target.value)}/></label><label>Responsable<select value={filters.responsable_id||''} onChange={e=>filter('responsable_id',e.target.value)}><option value="">Todos</option>{options(boot.usuarios)}</select></label></>}
++ </div><div className="table-wrap"><table><thead><tr><th>{view==='ci'?'Código':'Ticket'}</th><th>{view==='ci'?'Nombre':'Título'}</th><th>{view==='ci'?'Clasificación':portal?'Proceso':'Proceso / cola'}</th><th>Estado</th><th>Responsable</th><th>Detalle</th></tr></thead><tbody>{data.items.map(x=><tr key={x.id}><td>{view==='ci'?x.codigo:'#'+x.id}</td><td>{view==='ci'?x.nombre:x.titulo}</td><td>{view==='ci'?x.clase:labels[x.proceso]+(portal?'':' / '+x.cola)}</td><td><span className="badge">{x.estado}</span></td><td>{x.responsable||'Sin asignar'}</td><td><button className="secondary" onClick={()=>run(()=>open(x.id))}>Abrir</button></td></tr>)}</tbody></table></div><div className="toolbar"><button disabled={page===1} onClick={()=>setPage(p=>p-1)}>Anterior</button><span>Página {page} · {data.total} registros</span><button disabled={page*20>=data.total} onClick={()=>setPage(p=>p+1)}>Siguiente</button></div></section>}
++ {form?.kind==='ticket'&&<TicketPanel title="Nueva solicitud" onClose={closeTicket} busy={busy} error={error}><form onSubmit={e=>{e.preventDefault();run(async()=>{const {kind,...payload}=form;const t=await send('/tickets',{...payload,solicitante_id:payload.solicitante_id||undefined,detalle:details});setForm(null);await open(t.id);});}}><div className="edit">{inp('Título','titulo','text',true)}{pick('Servicio N2 de referencia','servicio_id',boot.servicios.filter(s=>s.activo!==false),true)}<label>Descripción<textarea required value={form.descripcion} onChange={e=>update('descripcion',e.target.value)}/></label><label>{portal?'Tipo de solicitud':'Cola / proceso'}<select required value={form.cola_id} onChange={e=>{update('cola_id',e.target.value);const p=boot.colas.find(c=>String(c.id)===e.target.value)?.proceso;setDetails(p==='incidentes'?{categoria:'I0',afectacion:'sin_interrupcion',redundancia:true}:p==='eventos'?{categoria:'E0'}:p==='accesos'?{beneficiario_id:session.user.id,operacion:'provision'}:{});if(p==='incidentes')update('prioridad',3);}}><option value="">Seleccionar</option>{options(boot.colas.filter(c=>c.activo))}</select></label>{(admin||worker)&&pick('Solicitante (vacío: yo)','solicitante_id',boot.usuarios)}<label>Prioridad<select value={form.prioridad} onChange={e=>update('prioridad',Number(e.target.value))}><option value="1">Alta</option><option value="2">Media</option><option value="3">Baja</option></select></label>{['impacto','urgencia','canal'].map(k=><label key={k}>{k}<select value={form[k]} onChange={e=>update(k,e.target.value)}>{(k==='impacto'?['bajo','medio','alto']:k==='urgencia'?['baja','media','alta']:['web','telefono','correo','monitoreo']).map(v=><option key={v}>{v}</option>)}</select></label>)}<label>Buscar dispositivos<input value={ciSearch} onChange={e=>setCiSearch(e.target.value)}/></label><label>CI afectados (Ctrl para varios)<select multiple value={form.ci_ids} onChange={e=>update('ci_ids',Array.from(e.target.selectedOptions,x=>x.value))}>{options(ciOptions)}</select></label>{!form.ci_ids.length&&inp('Justificación sin CI','sin_ci_motivo','text',true)}</div>{selectedProcess&&processFields(selectedProcess,details,setDetails)}<div className="toolbar"><button disabled={busy}>Crear ticket</button><button type="button" className="secondary" onClick={()=>setForm(null)}>Cancelar</button></div></form></TicketPanel>}
++ {selected&&view==='tickets'&&<TicketPanel title={portal?`Seguimiento del ticket #${selected.id}`:`Atender ticket #${selected.id}`} onClose={closeTicket} busy={busy} error={error}><div className="toolbar"><h2>Ticket #{selected.id} · {selected.titulo}</h2><span className="badge">{selected.estado}</span><button className="secondary" onClick={()=>setSelected(null)}>Cerrar ficha</button></div><p>{selected.descripcion}</p><dl><dt>Servicio</dt><dd>{selected.servicio.codigo} · {selected.servicio.nombre} / {selected.servicio.nivel1}</dd><dt>Proceso</dt><dd>{labels[selected.proceso]}</dd><dt>Creado</dt><dd>{date(selected.creado_en)}</dd><dt>Resuelto / cerrado</dt><dd>{date(selected.resuelto_en)} / {date(selected.cerrado_en)}</dd><dt>Resolución</dt><dd>{selected.resolucion||'Pendiente'}</dd><dt>Dispositivos</dt><dd>{selected.ci.map(c=>c.codigo+' '+c.nombre).join(', ')||selected.sin_ci_motivo}</dd></dl>
+  {(worker||approver)&&<><h3>Datos del proceso</h3>{processFields(selected.proceso,details,setDetails)}{worker&&<button disabled={busy} onClick={()=>run(async()=>{await send(`/tickets/${selected.id}`,{detalle:details},'PATCH');await open(selected.id);})}>Guardar datos del proceso</button>}<div className="edit"><label>Motivo / evaluación<textarea value={reason} onChange={e=>setReason(e.target.value)}/></label><label>Resolución<textarea value={resolution} onChange={e=>setResolution(e.target.value)}/></label></div><div className="toolbar">{worker&&<button disabled={busy} onClick={()=>action('tomar')}>Tomar ticket</button>}{selected.transiciones.map((s,i)=>{const next=selected.transiciones[selected.transiciones.indexOf(selected.estado)+1];return s===next&&((s==='aprobado'?approver:worker))?<button key={s} disabled={busy} onClick={()=>action('transicion',s)}>Avanzar a {s}</button>:null;})}{approver&&['analisis','evaluacion','validacion_solicitud'].includes(selected.estado)&&['nuevos','cambios','accesos'].includes(selected.proceso)&&<button className="danger" disabled={busy} onClick={()=>action('transicion','rechazado')}>Rechazar</button>}{worker&&<><button className="secondary" disabled={busy} onClick={()=>action(selected.estado==='pausado'?'retomar':'pausar')}>{selected.estado==='pausado'?'Retomar':'Pausar'}</button></>}</div>{worker&&<div className="edit"><label>Cola destino<select value={target} onChange={e=>setTarget(e.target.value)}><option value="">Seleccionar</option>{options(boot.colas.filter(c=>c.activo&&c.proceso===selected.proceso))}</select></label><label>Agente destino (opcional)<select value={agent} onChange={e=>setAgent(e.target.value)}><option value="">Sin asignar</option>{options(boot.usuarios)}</select></label><div className="toolbar"><button disabled={busy} onClick={()=>action('asignar')}>Asignar agente</button><button disabled={busy} onClick={()=>action('transferir')}>Transferir</button><button disabled={busy} onClick={()=>action('escalar')}>Escalar</button></div></div>}</>}
+  {selected.estado==='cerrado'&&(requester||worker)&&<div className="toolbar"><input placeholder="Motivo de reapertura" value={reason} onChange={e=>setReason(e.target.value)}/><button onClick={()=>action('reabrir')}>Reabrir</button></div>}
+  <h3>Conversación</h3>{selected.comentarios.map(c=><article className="comment" key={c.id}><strong>{c.actor} {c.interno?'· Nota interna':''}</strong><small>{date(c.fecha)}</small><p>{c.texto}</p></article>)}{(requester||worker||approver)&&<><textarea placeholder="Escribir comentario" value={note} onChange={e=>setNote(e.target.value)}/>{worker&&<label><input type="checkbox" checked={internal} onChange={e=>setInternal(e.target.checked)}/>Nota o adjunto interno</label>}<button disabled={busy} onClick={()=>run(async()=>{await send(`/tickets/${selected.id}/comentarios`,{texto:note,interno:internal});setNote('');await open(selected.id);})}>Publicar comentario</button><label>Adjuntar PDF, PNG, JPEG o TXT · máximo 2 MiB<input type="file" accept=".pdf,.png,.jpg,.jpeg,.txt" onChange={e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>2097152){setError('Máximo 2 MiB');return;}run(async()=>{const bytes=new Uint8Array(await f.arrayBuffer());let raw='';for(let i=0;i<bytes.length;i++)raw+=String.fromCharCode(bytes[i]);await send(`/tickets/${selected.id}/adjuntos`,{nombre:f.name,mime:f.type||'text/plain',base64:btoa(raw),interno:internal});await open(selected.id);});}}/></label></>}
+  <ul>{selected.adjuntos.map(a=><li key={a.id}><button className="secondary" onClick={()=>run(async()=>{const res=await fetch('/api/desk/adjuntos/'+a.id,{headers:{Authorization:'Bearer '+session.access_token}});if(!res.ok)throw new Error('Descarga no autorizada');const url=URL.createObjectURL(await res.blob());const el=document.createElement('a');el.href=url;el.download=a.nombre;el.click();setTimeout(()=>URL.revokeObjectURL(url),1000);})}>{a.nombre}</button></li>)}</ul>
+- <h3>Tickets relacionados</h3>{selected.relaciones.map((r,i)=><p key={i}>#{r.origen_id} · {r.tipo} · #{r.destino_id}</p>)}{worker&&<div className="toolbar"><input placeholder="ID ticket destino" value={linkId} onChange={e=>setLinkId(e.target.value)}/><select value={relation} onChange={e=>setRelation(e.target.value)}>{['relacionado','causa','corrige','duplicado'].map(v=><option key={v}>{v}</option>)}</select><button onClick={()=>run(async()=>{await send(`/tickets/${selected.id}/relaciones`,{destino_id:linkId,tipo:relation});await open(selected.id);})}>Vincular</button></div>}
+- {selected.notificaciones.map(n=><p className="notice" key={n.id}>{n.mensaje} · {date(n.fecha)}</p>)}<h3>Bitácora de acciones</h3><table><thead><tr><th>Fecha</th><th>Actor</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>{selected.bitacora.map(b=><tr key={b.id}><td>{date(b.fecha)}</td><td>{b.actor}</td><td>{b.accion}</td><td>{b.anterior?.estado||'—'} → {b.nuevo?.estado||'—'} {b.motivo}<details><summary>Valores anteriores y nuevos</summary><pre>{JSON.stringify({anterior:b.anterior,nuevo:b.nuevo},null,2)}</pre></details></td></tr>)}</tbody></table></section>}
++ {!portal&&<h3>Tickets relacionados</h3>}{selected.relaciones.map((r,i)=><p key={i}>#{r.origen_id} · {r.tipo} · #{r.destino_id}</p>)}{worker&&<div className="toolbar"><input placeholder="ID ticket destino" value={linkId} onChange={e=>setLinkId(e.target.value)}/><select value={relation} onChange={e=>setRelation(e.target.value)}>{['relacionado','causa','corrige','duplicado'].map(v=><option key={v}>{v}</option>)}</select><button onClick={()=>run(async()=>{await send(`/tickets/${selected.id}/relaciones`,{destino_id:linkId,tipo:relation});await open(selected.id);})}>Vincular</button></div>}
++ {selected.notificaciones.map(n=><p className="notice" key={n.id}>{n.mensaje} · {date(n.fecha)}</p>)}<h3>{portal?'Seguimiento de la solicitud':'Bitácora de acciones'}</h3><table><thead><tr><th>Fecha</th><th>Actor</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>{selected.bitacora.map(b=><tr key={b.id}><td>{date(b.fecha)}</td><td>{b.actor}</td><td>{b.accion}</td><td>{b.anterior?.estado||'—'} → {b.nuevo?.estado||'—'} {b.motivo}{!portal&&<details><summary>Valores anteriores y nuevos</summary><pre>{JSON.stringify({anterior:b.anterior,nuevo:b.nuevo},null,2)}</pre></details>}</td></tr>)}</tbody></table></TicketPanel>}
+  {form?.kind==='ci'&&<section><h2>{form.id?'Editar':'Crear'} elemento de configuración</h2><form onSubmit={e=>{e.preventDefault();run(async()=>{const payload={};for(const k of ['codigo','nombre','clase_id','ubicacion_id','responsable_id','estado','activo','es_dispositivo','servicio_ids'])payload[k]=form[k];payload.atributos=JSON.parse(form.atributosTexto);await send('/ci'+(form.id?'/'+form.id:''),payload,form.id?'PATCH':'POST');setForm(null);});}}><div className="edit">{inp('Código único','codigo','text',true)}{inp('Nombre','nombre','text',true)}{pick('Clasificación','clase_id',boot.clases.filter(c=>c.activo),true)}{pick('Ubicación','ubicacion_id',boot.ubicaciones.filter(c=>c.activo),true)}{pick('Responsable','responsable_id',boot.usuarios,true)}{inp('Estado operativo','estado','text',true)}<label>Disponible<select value={String(form.activo)} onChange={e=>update('activo',e.target.value==='true')}><option value="true">Sí</option><option value="false">No / baja lógica</option></select></label><label>Es dispositivo físico<select value={String(form.es_dispositivo)} onChange={e=>update('es_dispositivo',e.target.value==='true')}><option value="true">Sí</option><option value="false">No</option></select></label><label>Servicios asociados<select multiple value={form.servicio_ids} onChange={e=>update('servicio_ids',Array.from(e.target.selectedOptions,x=>x.value))}>{options(boot.servicios)}</select></label></div><label>Atributos técnicos por clase (objeto JSON; conserve las claves originales)<textarea className="json-editor" value={form.atributosTexto} onChange={e=>update('atributosTexto',e.target.value)}/></label><button disabled={busy}>Guardar CI</button><button type="button" className="secondary" onClick={()=>setForm(null)}>Cancelar</button></form></section>}
+  {selected&&view==='ci'&&<section><div className="toolbar"><h2>#{selected.id} · {selected.codigo} · {selected.nombre}</h2>{admin&&<button onClick={()=>newCi(selected)}>Editar CI</button>}<button className="secondary" onClick={()=>setSelected(null)}>Cerrar ficha</button></div><p>Clasificación: {selected.clasificacion.map(c=>c.nombre).join(' / ')}</p><dl>{Object.entries(selected.atributos).map(([k,v])=><React.Fragment key={k}><dt>{k}</dt><dd>{typeof v==='object'?JSON.stringify(v):String(v??'Sin información')}</dd></React.Fragment>)}</dl><h3>Relaciones técnicas navegables</h3>{selected.relaciones.map((r,i)=><div className="toolbar" key={i}><button className="secondary" onClick={()=>run(()=>open(r.origen_id))}>{r.origen}</button><span>{r.tipo}</span><button className="secondary" onClick={()=>run(()=>open(r.destino_id))}>{r.destino}</button></div>)}{admin&&<div className="toolbar"><input placeholder="ID CI destino" value={linkId} onChange={e=>setLinkId(e.target.value)}/><select value={relation} onChange={e=>setRelation(e.target.value)}><option value="relacionado" disabled>Seleccionar relación</option>{['depende_de','alojado_en','conectado_a'].map(v=><option key={v}>{v}</option>)}</select><button onClick={()=>run(async()=>{await send(`/ci/${selected.id}/relaciones`,{destino_id:linkId,tipo:relation});await open(selected.id);})}>Crear relación</button></div>}<h3>Servicios asociados</h3>{selected.servicios.map(s=><p key={s.id}>{s.codigo} · {s.nombre}</p>)}<h3>Recorrido de dependencias</h3><p>Estos CI dependen directa o indirectamente del seleccionado. Las relaciones indican impacto potencial, no una interrupción confirmada.</p><div className="toolbar">{selected.dependencias.map(c=><button key={c.id} className="secondary" onClick={()=>run(()=>open(c.id))}>{c.codigo} · {c.nombre}</button>)}</div><h3>Servicios potencialmente afectados</h3>{selected.servicios_potencialmente_afectados.map(s=><p key={s.id}>{s.codigo} · {s.nombre}</p>)}<h3>Historial de tickets</h3>{selected.tickets.map(t=><p key={t.id}>#{t.id} · {t.titulo} · {t.estado}</p>)}<h3>Cambios del CI</h3>{selected.historial.map(h=><p key={h.id}>{date(h.fecha)} · Actor #{h.actor_id} · {h.accion}</p>)}{selected.fuente&&<details><summary>Trazabilidad del Excel original</summary><pre>{JSON.stringify(selected.fuente,null,2)}</pre></details>}</section>}
+  {view==='indicadores'&&stats&&<section><h2>Indicadores de atención</h2><div className="kpis"><article><strong>{stats.total}</strong><span>Tickets visibles</span></article><article><strong>{stats.cmdb.reduce((s,c)=>s+c.dispositivos,0)}</strong><span>Dispositivos persistidos</span></article><article><strong>{stats.tickets.filter(t=>t.objetivo_resolucion==='vencido_abierto').length}</strong><span>Abiertos fuera de objetivo</span></article></div><p>{stats.reloj}</p><p>Reapertura: conserva creación y primera atención, elimina resolución/cierre vigentes y mantiene los ciclos anteriores en bitácora. Un objetivo pendiente no se cuenta como cumplido.</p><table><thead><tr><th>Cola</th><th>Proceso</th><th>Prioridad</th><th>Estado</th><th>Total</th></tr></thead><tbody>{stats.grupos.map((g,i)=><tr key={i}><td>{g.cola}</td><td>{labels[g.proceso]}</td><td>{g.prioridad}</td><td>{g.estado}</td><td>{g.total}</td></tr>)}</tbody></table><h3>Tiempos observados por ticket · minutos</h3><div className="table-wrap"><table><thead><tr><th>Ticket</th><th>Antigüedad</th><th>Primera atención</th><th>Resolución / transcurrido</th><th>Objetivo primera</th><th>Objetivo resolución</th></tr></thead><tbody>{stats.tickets.map(t=><tr key={t.id}><td>#{t.id}</td><td>{Number(t.antiguedad_min).toFixed(1)}</td><td>{t.primera_min_real===null?'Pendiente':Number(t.primera_min_real).toFixed(1)}</td><td>{Number(t.resolucion_min_real).toFixed(1)}</td><td>{t.objetivo_primera}</td><td>{t.objetivo_resolucion}</td></tr>)}</tbody></table></div><h3>Distribución de dispositivos</h3>{stats.cmdb.map(c=><p key={c.codigo}>{c.nombre}: {c.dispositivos}</p>)}</section>}
+diff --git a/frontend/src/TicketPanel.jsx b/frontend/src/TicketPanel.jsx
+new file mode 100644
+index 0000000..12afb01
+--- /dev/null
++++ b/frontend/src/TicketPanel.jsx
+@@ -0,0 +1,15 @@
++import React,{useEffect,useRef} from 'react';
++/** Panel lateral en la capa superior: foco contenido y Escape nativos del dialog. */
++export default function TicketPanel({title,onClose,busy=false,error,children}){
++ const ref=useRef(null);
++ useEffect(()=>{const dialog=ref.current,previous=document.activeElement,overflow=document.body.style.overflow;
++  dialog.showModal();document.body.style.overflow='hidden';
++  return()=>{dialog.close();document.body.style.overflow=overflow;if(previous?.isConnected)previous.focus();};
++ },[]);
++ return <dialog ref={ref} className="ticket-panel" aria-labelledby="ticket-panel-title"
++  onCancel={e=>{e.preventDefault();if(!busy)onClose();}}
++  onClick={e=>{if(e.target===e.currentTarget&&!busy){const r=e.currentTarget.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)onClose();}}}>
++  <header className="ticket-panel-header"><div><p className="eyebrow">SERVICE DESK</p><h2 id="ticket-panel-title">{title}</h2></div><button type="button" className="secondary" disabled={busy} aria-label="Cerrar panel de ticket" onClick={onClose}>Cerrar ×</button></header>
++  <div className="ticket-panel-body">{error&&<p className="error" role="alert">{error}</p>}{busy&&<p role="status">Procesando…</p>}{children}</div>
++ </dialog>;
++}
+diff --git a/frontend/src/main.jsx b/frontend/src/main.jsx
+index 68256c7..d5c4acd 100644
+--- a/frontend/src/main.jsx
++++ b/frontend/src/main.jsx
+@@ -9,18 +9,21 @@ function App(){
+  const [resource,setResource]=useState('servicios-nivel2'),[result,setResult]=useState({items:[],total:0}),[filters,setFilters]=useState({}),[page,setPage]=useState(1),[lookups,setLookups]=useState({}),[form,setForm]=useState(null),[detail,setDetail]=useState(null),[report,setReport]=useState(null),[refresh,setRefresh]=useState(0);
+  const admin=session?.user.rol==='administrador';
+  const [deskView,setDeskView]=useState(true);
++ const effectiveRoles=session?.user.roles||[session?.user.rol];
++ const portal=!admin&&effectiveRoles.includes('solicitante')&&!effectiveRoles.some(r=>['agente','aprobador'].includes(r));
++ const roleLabel=effectiveRoles.filter(r=>r!=='consulta'||effectiveRoles.length===1).map(r=>r?r[0].toUpperCase()+r.slice(1):'').join(' · ');
+  const request=useCallback(async(path,options={},token=session?.access_token)=>{
+   const res=await fetch(`/api${path}`,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}});
+   const data=res.status===204?null:await res.json();if(!res.ok){if(res.status===401&&token)setSession(null);throw new Error(Array.isArray(data?.message)?data.message.join(', '):data?.message||'Solicitud rechazada');}return data;
+  },[session]);
+- useEffect(()=>{if(!session)return;let cancelled=false;
++ useEffect(()=>{if(!session||portal||deskView)return;let cancelled=false;
+   const q=new URLSearchParams({pagina:String(page),limite:'20',...Object.fromEntries(Object.entries(filters).filter(([,v])=>v!==''))});
+   request(`/${resource}?${q}`).then(r=>{if(!cancelled)setResult(r);}).catch(e=>{if(!cancelled)setMessage(e.message);});return()=>{cancelled=true;};
+- },[session,resource,filters,page,refresh,request]);
+- useEffect(()=>{if(!session)return;let cancelled=false;
++ },[session,resource,filters,page,refresh,request,portal,deskView]);
++ useEffect(()=>{if(!session||portal||deskView)return;let cancelled=false;
+   async function load(){const sources=Object.keys(resources).filter(k=>k!=='servicios-nivel2'&&(admin||k!=='usuarios'));const entries=await Promise.all(sources.map(async key=>{let items=[],pagina=1,total;do{const r=await request(`/${key}?limite=100&pagina=${pagina++}`);items.push(...r.items);total=r.total;}while(items.length<total);return[key,items];}));if(!cancelled)setLookups(Object.fromEntries(entries));}
+   load().catch(e=>{if(!cancelled)setMessage(e.message);});return()=>{cancelled=true;};
+- },[session,admin,refresh,request]);
++ },[session,admin,refresh,request,portal,deskView]);
+  async function login(e){e.preventDefault();setBusy(true);setMessage('');try{setSession(await request('/auth/login',{method:'POST',body:JSON.stringify({identifier,password})},null));setPassword('');}catch(e){setMessage(e.message);}finally{setBusy(false);}}
+  async function action(fn){setBusy(true);setMessage('');try{await fn();setRefresh(n=>n+1);}catch(e){setMessage(e.message);}finally{setBusy(false);}}
+  function navigate(key){setResource(key);setFilters({});setPage(1);setForm(null);setDetail(null);setReport(null);setMessage('');}
+@@ -39,10 +42,10 @@ function App(){
+   return <input type={f.type} value={v} onChange={change} required={!f.nullable&&f.type!=='password'||f.type==='password'&&!form.id} autoComplete={f.type==='password'?'new-password':undefined}/>;
+  }
+  const labelRef=(key,id)=>lookups[key]?.find(x=>x.id===id)?.nombre||id||'Sin información';
+- return <main><header><p className="eyebrow">GESTIÓN DE SERVICIOS TI</p><h1>Catálogo de servicios</h1>{session&&<div className="toolbar"><span>{session.user.nombre} · {session.user.rol}</span><button className="secondary" disabled={busy} onClick={()=>action(async()=>{await request('/auth/logout',{method:'POST'});setSession(null);setForm(null);})}>Cerrar sesión</button></div>}</header>
++ return <main><header><p className="eyebrow">GESTIÓN DE SERVICIOS TI</p><h1>{portal?'Portal del solicitante':'Catálogo de servicios'}</h1>{session&&<div className="toolbar"><span>{session.user.nombre} · {roleLabel}</span><button className="secondary" disabled={busy} onClick={()=>action(async()=>{await request('/auth/logout',{method:'POST'});setSession(null);setForm(null);})}>Cerrar sesión</button></div>}</header>
+  {!session?<form className="login" onSubmit={login}><h2>Iniciar sesión</h2><label>Usuario o correo<input required autoComplete="username" value={identifier} onChange={e=>setIdentifier(e.target.value)}/></label><label>Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label><button disabled={busy}>Ingresar</button></form>:<>
+- <div className="toolbar"><button onClick={()=>setDeskView(true)}>Service Desk</button><button className="secondary" onClick={()=>setDeskView(false)}>Catálogo y organización</button></div>
+- {deskView?<Desk request={request} session={session}/>:<>
++ <div className="toolbar"><button onClick={()=>setDeskView(true)}>Service Desk</button>{!portal&&<button className="secondary" onClick={()=>setDeskView(false)}>Catálogo y organización</button>}</div>
++ {(deskView||portal)?<Desk request={request} session={session}/>:<>
+  <nav aria-label="Módulos">{Object.entries(resources).filter(([,r])=>!r.admin||admin).map(([key,r])=><button className={resource===key?'selected':'secondary'} key={key} onClick={()=>navigate(key)}>{r.label}</button>)}</nav>
+  <section><div className="toolbar"><h2>{resources[resource].label}</h2>{admin&&<button disabled={busy} onClick={()=>{openForm();if(resource==='usuarios')setForm(prev=>({...prev,value:{...prev.value,rol:'consulta'}}));}}>Crear registro</button>}{admin&&resource.startsWith('servicios')&&<button disabled={busy} onClick={()=>action(async()=>{const r=await request('/importaciones',{method:'POST'});setReport(r);setMessage('Importación completada.');})}>Importar Excel</button>}{admin&&<button className="secondary" disabled={busy} onClick={()=>action(async()=>{setReport(await request('/importaciones'));})}>Ver importaciones</button>}</div>
+  {admin&&['clases','criticidades','tipos'].includes(resource)&&<button className="secondary" disabled={busy} onClick={()=>action(async()=>setReport({mapeos:await request('/catalog/mapeos')}))}>Ver mapeos de etiquetas</button>}
+diff --git a/frontend/src/style.css b/frontend/src/style.css
+index 2efeb17..20a893d 100644
+--- a/frontend/src/style.css
++++ b/frontend/src/style.css
+@@ -1,2 +1,9 @@
+ :root{font-family:Inter,system-ui,sans-serif;color:#172d45;background:#f2f5fa;font-synthesis:none}*{box-sizing:border-box}body{margin:0}main{max-width:1440px;margin:auto;padding:32px}header{margin-bottom:24px}h1{font-size:32px;letter-spacing:-.8px;margin:8px 0 16px}h2{font-size:20px}.eyebrow{font-size:12px;font-weight:800;letter-spacing:2px;color:#2563a5}section,.login{background:white;border:1px solid #dae3ef;border-radius:12px;padding:24px;margin:20px 0;box-shadow:0 4px 16px #142e4710}.login{max-width:460px}label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600}input,select,textarea{font:inherit;font-size:14px;color:inherit;border:1px solid #b9c9db;border-radius:6px;padding:10px;min-width:0;background:white}textarea{min-height:100px}.login label{margin:16px 0}button{font:inherit;font-size:13px;border:0;border-radius:6px;background:#185997;color:white;padding:10px 14px;cursor:pointer}button:hover{filter:brightness(.96)}button:disabled{opacity:.45;cursor:default}.secondary{color:#234d73;background:#eaf0f7}.danger{color:#9b2937;background:#fff0f0}nav,.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center}nav{gap:6px}.toolbar h2{margin-right:auto}.filters,.edit{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:16px;margin:20px 0}.edit .toolbar{grid-column:1/-1}.table-wrap{overflow:auto}table{border-collapse:collapse;width:100%;font-size:13px}th{text-align:left;color:#587086;background:#f5f8fc}th,td{padding:14px 10px;border-bottom:1px solid #e4ebf3}td button{margin:3px}small{display:block;color:#9b6613;margin-top:5px}.table-wrap+.toolbar{margin-top:20px}dl{display:grid;grid-template-columns:180px 1fr;gap:10px;font-size:14px}dt{font-weight:700}dd{margin:0;white-space:pre-wrap}pre{font-size:12px;overflow:auto;max-height:450px;background:#f4f7fb;padding:16px;border-radius:6px}.message{position:sticky;bottom:16px;background:#172d45;color:white;padding:14px;border-radius:8px}.message:empty{display:none}@media(max-width:640px){main{padding:16px}h1{font-size:25px}section{padding:16px}dl{grid-template-columns:1fr}dd{margin-bottom:10px}}
+ .desk-banner{display:flex;align-items:center;justify-content:space-between;background:linear-gradient(120deg,#103c51,#126b6f);color:white;padding:24px;border-radius:14px;margin:18px 0}.desk-banner h2{color:white;margin:4px 0}.role-pill{background:#ffffff24;border:1px solid #ffffff55;border-radius:30px;padding:10px 16px}.desk-tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px}.badge{background:#e5f4ef;color:#145941;border-radius:20px;padding:5px 10px;white-space:nowrap}.error{background:#fee9e5;border-left:4px solid #b33423;padding:16px;color:#7e2219}.notice{background:#e6f3fd;padding:14px}.comment{border-left:3px solid #178f87;background:#f3f8f9;padding:16px;margin:12px 0}.comment small{display:block;color:#56676e}.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin:20px 0}.kpis article{background:#edf5f6;border:1px solid #d5e3e6;padding:24px;border-radius:12px}.kpis strong{display:block;font-size:36px;color:#124f5d}.kpis span{color:#465e66}.inline{display:inline-flex;align-items:center;gap:6px;margin:5px}.inline input,input[type=checkbox]{width:auto}.permission-row{border:1px solid #d7e3e6;padding:12px;margin:10px 0;border-radius:8px}.json-editor{font-family:monospace;min-height:160px}textarea{min-height:90px}select[multiple]{min-height:120px}details pre{max-height:300px;overflow:auto;font-size:12px}button:disabled{opacity:.55;cursor:wait}section h3{margin-top:26px}dl{overflow-wrap:anywhere}@media(max-width:700px){.desk-banner{display:block}.role-pill{display:inline-block;margin-top:10px}}
++/* Panel lateral de creación y atención; no desplaza el formulario al pie del listado. */
++.ticket-panel{box-sizing:border-box;position:fixed;inset:0 0 0 auto;margin:0;height:100dvh;max-height:100dvh;width:min(820px,96vw);max-width:96vw;padding:0;border:0;border-left:1px solid #d8e4e9;background:#fff;color:#173646;box-shadow:-12px 0 50px #102b4530;overflow-y:auto;animation:ticket-panel-in .18s ease-out}
++.ticket-panel::backdrop{background:#10273780}
++.ticket-panel-header{position:sticky;top:0;z-index:2;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:18px 24px;background:#f2f7f9;border-bottom:1px solid #dce7eb}
++.ticket-panel-header h2{font-size:1.25rem;margin:4px 0}.ticket-panel-header .eyebrow{margin:0}.ticket-panel-body{padding:24px}.ticket-panel-body>.toolbar{flex-wrap:wrap}.ticket-panel-body .edit{grid-template-columns:repeat(2,minmax(0,1fr))}.ticket-panel-body textarea{width:100%;box-sizing:border-box}.ticket-panel-body .table-wrap{overflow-x:auto}.ticket-panel-body table{font-size:.85rem}.ticket-panel-body label{min-width:0}.ticket-panel-body input,.ticket-panel-body select{max-width:100%;box-sizing:border-box}.ticket-panel-body .error{position:sticky;top:0;z-index:1}
++@keyframes ticket-panel-in{from{transform:translateX(30px);opacity:.6}to{transform:translateX(0);opacity:1}}
++@media(prefers-reduced-motion:reduce){.ticket-panel{animation:none}}@media(max-width:620px){.ticket-panel{width:100vw;max-width:100vw}.ticket-panel-body{padding:16px}.ticket-panel-body .edit{grid-template-columns:1fr}}

@@ -1,0 +1,82 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> catalogo-ti-backend@0.3.0 test:desk
+> node --test tests/desk.test.cjs
+
+Cuenta creada: admin
+Cuenta creada: consulta
+▶ Service Desk: fuentes originales, API y PostgreSQL aislado
+  ✔ P01: autenticación y consulta sin permisos de escritura (12.875151ms)
+  ✔ P02: catálogo 12/46 repetible con incidencias originales (1056.787949ms)
+{
+  "semilla": "TEST5000",
+  "conjunto": "seed:TEST5000",
+  "conteo_generados": 5000,
+  "por_categoria": [
+    {
+      "codigo": "HW",
+      "cantidad": 1
+    },
+    {
+      "codigo": "SW",
+      "cantidad": 0
+    },
+    {
+      "codigo": "HW-SRV",
+      "cantidad": 1686
+    },
+    {
+      "codigo": "HW-PC",
+      "cantidad": 1613
+    },
+    {
+      "codigo": "HW-NET",
+      "cantidad": 1701
+    }
+  ],
+  "observaciones": [
+    "Jerarquía extendida es decisión del proyecto, pendiente validación docente"
+  ]
+}
+  ✖ P03: 5000 dispositivos, 37 tickets, repetición sin duplicar (2593.619389ms)
+  ✔ P04: clasificación con origen, rechazo de ciclos y padres inexistentes (36.342884ms)
+  ✔ P05: referencias válidas/inválidas, servicio N1 derivado y condición sin CI (40.410112ms)
+  ✔ P06: permiso por usuario, rol y consulta sin elevación (32.990662ms)
+  ✔ P07: dos agentes toman simultáneamente; solo uno obtiene asignación (46.042353ms)
+  ✔ P08: transferencia y escalamiento con motivo y proceso validado (28.304897ms)
+  ✔ P09/P10: siete rutas completas; cambios sin aprobación y autoaprobación rechazados (712.836313ms)
+  ✔ P11: E0–E3 e incidente idempotente al reabrir evento (408.513411ms)
+  ✔ P12: I0–I6 y regla complementaria de duraciones (9.711162ms)
+  ✔ P13: vínculo incidente–problema–cambio recuperable (20.380916ms)
+  ✔ P14: dependencias CI/servicios, ciclos técnicos según tipo (36.625548ms)
+  ✔ P15: cierre sin resolución, reapertura, bitácora y notas internas (46.658021ms)
+  ✔ Adjuntos: firma, límites, descarga autorizada e interna (30.904963ms)
+{"prueba":"P16","entorno":"Node v24.22.1, PGlite WASM, HTTP local","ms":40.56685599999946,"registros":5000}
+  ✔ P16: filtros y paginación de 5000 dispositivos con tiempo observado (40.836804ms)
+  ✔ P17: objetivos con abiertos, primera atención, pausas y reaperturas (48.945404ms)
+  ✔ Bajas protegidas de usuarios y colas con casos abiertos (22.760688ms)
+P18: requiere Docker real; no sustituido por PGlite.
+  ✔ Logout impide reutilización de token (7.777661ms)
+✖ Service Desk: fuentes originales, API y PostgreSQL aislado (9705.614202ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 18
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10487.671553
+
+✖ failing tests:
+
+test at tests/desk.test.cjs:15:22
+✖ P03: 5000 dispositivos, 37 tickets, repetición sin duplicar (2593.619389ms)
+  BadRequestException: Campo inválido: resultado_validacion
+      at bad (/workspace/scratch/ff1b7e344a11/service-desk/backend/dist/desk/desk.service.js:17:34)
+      at text (/workspace/scratch/ff1b7e344a11/service-desk/backend/dist/desk/desk.service.js:19:5)
+      at /workspace/scratch/ff1b7e344a11/service-desk/backend/dist/desk/desk.service.js:300:21
+      at async EntityManager.transaction (/workspace/scratch/ff1b7e344a11/review/parcial-catalogo-servicios-202211515/backend/node_modules/typeorm/entity-manager/EntityManager.js:75:28) {
+    response: { message: 'Campo inválido: resultado_validacion', error: 'Bad Request', statusCode: 400 },
+    status: 400,
+    options: {}
+  }

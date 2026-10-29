@@ -1,0 +1,72 @@
+{
+  "fecha_registro": "2026-10-29T16:52:08.776321-06:00",
+  "fecha_ejecucion": "2026-10-29",
+  "zona": "America/Guatemala",
+  "codigo_commit": "6fdfabf2995d7ebb9697fc2f1da9d33bfc45bcbb",
+  "documentacion": "doc_p3 consolidada después del commit de código",
+  "entorno": {
+    "sistema": "Ubuntu 24.04.3 LTS",
+    "kernel": "Linux 6.18.55 x86_64",
+    "node": "v24.22.1",
+    "db": "PGlite WASM aislada",
+    "frontend": "React/LinkeDOM, respuestas API simuladas"
+  },
+  "ejecuciones": [
+    {
+      "directorio": "backend",
+      "comando": "npm run test:embedded",
+      "salida": 0,
+      "tests": 23,
+      "aprobados": 23,
+      "fallos": 0,
+      "log": "regresion.txt"
+    },
+    {
+      "directorio": "backend",
+      "comando": "npm run test:desk",
+      "salida": 0,
+      "tests": 24,
+      "aprobados": 24,
+      "fallos": 0,
+      "log": "service-desk.txt"
+    },
+    {
+      "directorio": "frontend",
+      "comando": "npm test",
+      "salida": 0,
+      "tests": 9,
+      "aprobados": 9,
+      "fallos": 0,
+      "log": "frontend.txt"
+    }
+  ],
+  "builds": [
+    {
+      "directorio": "backend",
+      "comando": "npm run build",
+      "salida": 0,
+      "log": "build-backend.txt"
+    },
+    {
+      "directorio": "frontend",
+      "comando": "npm run build",
+      "salida": 0,
+      "log": "build-frontend.txt"
+    }
+  ],
+  "P16": {
+    "ms": 41.747542000000976,
+    "registros": 5000,
+    "pagina": 100,
+    "limite": 20
+  },
+  "pendientes": [
+    "P04: confirmación de taxonomía docente completa",
+    "Docker Compose real",
+    "harness live",
+    "P18 persistencia por reinicio",
+    "navegación visual exhaustiva"
+  ],
+  "total_tests_reportado": 56,
+  "conteo_incluye_contenedoras_backend": true
+}

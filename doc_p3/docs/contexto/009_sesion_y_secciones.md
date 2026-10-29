@@ -1,0 +1,5 @@
+# Sesión y navegación de tickets — 29/10/2026
+
+El usuario reportó pérdida de sesión al recargar y presentó cuatro capturas con una ficha larga: proceso, acciones, conversación, relaciones y bitácora apilados. El frontend solo guardaba la sesión en useState. Se mantiene la autenticación local JWT/jti de 15 minutos y se agrega persistencia de la credencial temporal por pestaña con sessionStorage, comprobando identidad y roles mediante /auth/me antes de restaurar. Logout/401 eliminan la credencial; fallos de conexión permiten reintentar. No se almacenan contraseñas ni roles cacheados.
+
+La ficha se divide en secciones conservando los controles del servidor. El agente abre Atención con responsable visible y toma accesible; se deshabilita tomar casos ya asignados. El solicitante mantiene solo resumen, conversación y seguimiento. Componentes ocultos permanecen montados para conservar campos al navegar entre secciones. Se comprueban nueve pruebas unitarias y DOM; build correcto. No se afirma ejecución Docker ni inspección visual real.

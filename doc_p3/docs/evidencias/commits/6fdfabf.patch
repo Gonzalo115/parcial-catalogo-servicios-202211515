@@ -1,0 +1,930 @@
+commit 6fdfabf2995d7ebb9697fc2f1da9d33bfc45bcbb
+Author:     Codex <codex@openai.com>
+AuthorDate: Thu Oct 29 16:22:01 2026 -0600
+Commit:     Codex <codex@openai.com>
+CommitDate: Thu Oct 29 16:22:01 2026 -0600
+
+    fix: restore session on reload and organize ticket sections
+
+diff --git a/README.md b/README.md
+index 783ba71..2d53a5d 100644
+--- a/README.md
++++ b/README.md
+@@ -67,3 +67,5 @@ No se declara verificado Docker en el entorno de construcción de esta entrega:
+ ## Historial local
+ 
+ `VERSION.txt` identifica la fuente validada. `HISTORIAL_COMMITS.txt` lista decisiones y `historial.bundle` conserva commits, sin requerir Git para levantar Docker. Para recuperar el repositorio con Git: `git clone historial.bundle ../service-desk-con-historial`. No se publicó en un remoto.
++
++Actualización de sesión al recargar y ficha por secciones: [aplicación y pruebas](docs/PARCHE_SESION_Y_SECCIONES.md).
+diff --git a/docs/PARCHE_SESION_Y_SECCIONES.md b/docs/PARCHE_SESION_Y_SECCIONES.md
+new file mode 100644
+index 0000000..b90d22f
+--- /dev/null
++++ b/docs/PARCHE_SESION_Y_SECCIONES.md
+@@ -0,0 +1,46 @@
++# Sesión al recargar y ficha por secciones
++
++Aplicar sobre la ampliación con el parche `service-desk-portal-solicitantes-paneles.patch` ya instalado. No aplicar este parche directamente al parcial original.
++
++## Aplicación en Windows PowerShell
++
++Guardar `service-desk-sesion-secciones.patch` en la raíz del repositorio, donde está docker-compose.yml:
++
++```powershell
++git apply --check .\service-desk-sesion-secciones.patch
++git apply .\service-desk-sesion-secciones.patch
++docker compose up --build -d --wait --wait-timeout 180
++```
++
++Actualizar el navegador con Ctrl+F5. Iniciar sesión una vez tras actualizar: la versión anterior no almacenaba la credencial y no puede recuperar una sesión que ya perdió. No requiere seed, migración, cambios en .env ni reiniciar los datos.
++
++## Comportamiento
++
++- La credencial temporal se guarda en sessionStorage, durante la pestaña abierta, y se restaura al recargar. No se almacena contraseña ni perfil de usuario.
++- Antes de mostrar el sistema, se valida `/api/auth/me`. El servidor entrega la identidad y los roles actuales; un token almacenado no concede acceso por sí solo.
++- Se mantiene el vencimiento original de 15 minutos desde el login. Recargar no renueva el plazo. No se añade refresh token ni sesión indefinida.
++- Cerrar sesión mantiene la revocación en PostgreSQL y elimina la credencial del navegador. Un 401 también la elimina; un fallo de red o un 503 permite reintentar la validación sin perderla.
++- sessionStorage se usa por pestaña. Si el navegador bloquea el almacenamiento, se permite operar en memoria; en ese caso recargar exige ingresar nuevamente.
++- La ficha presenta cabecera con estado, cola y responsable para el operador, y navegación por secciones. El agente/aprobador comienza en Atención; allí encuentra la acción Tomar ticket y el flujo de estados. El botón de toma queda deshabilitado si ya hay responsable o el estado impide asignar.
++- Resumen conserva los atributos generales y CI; Datos del proceso conserva los campos técnicos y su guardado; Conversación agrupa comentarios y adjuntos; Relaciones e Historial tienen su propia sección.
++- Asignación, transferencia y escalamiento se despliegan dentro de Atención, con el mismo control del servidor y motivo requerido cuando corresponde.
++- Cambiar entre secciones conserva los campos pendientes de guardar. Cerrar el panel o recargar no guarda borradores. Las acciones conservan el comportamiento previo: al completarse vuelven a cargar los datos del ticket.
++- El solicitante solo ve Resumen, Conversación y Seguimiento. Continúan vigentes las restricciones del parche anterior en servidor.
++
++## Prueba manual
++
++1. Ingresar como agente1 y pulsar F5 dentro de los 15 minutos del login: debe aparecer brevemente Restaurando sesión y volver a mostrar el usuario autenticado.
++2. Cerrar sesión y recargar: debe permanecer el formulario de ingreso. Al cumplirse los 15 minutos se requiere un nuevo login.
++3. Abrir un ticket sin responsable: Atención debe estar seleccionada y Tomar ticket visible. Tomarlo: la cabecera muestra al agente y la toma queda deshabilitada.
++4. Entrar a Datos del proceso, escribir un valor sin guardar, cambiar a Historial y regresar: el valor sigue presente. Guardar los datos y comprobar la bitácora.
++5. Publicar un comentario desde Conversación, adjuntar un TXT de prueba y descargarlo. Probar la transferencia con motivo desde el desplegable de Atención si se dispone de una cola destino autorizada.
++6. Ingresar como solicitante2: confirmar que solo aparecen sus solicitudes y las tres secciones permitidas en su ficha.
++7. En una pantalla estrecha, verificar que los botones de sección se distribuyen en filas, que el panel desplaza su contenido y que Cerrar y Escape funcionan.
++
++## Validación ejecutada
++
++`npm --prefix frontend test`: 9 pruebas aprobadas. Incluyen casos de almacenamiento/restauración, errores y vencimiento, montaje/desmontaje del hook simulando recarga, navegación DOM conservando campos, ficha real con toma por agente y secciones restringidas para solicitante.
++
++`npm --prefix frontend run build`: compilación de producción aprobada. Dockerfile del frontend ejecuta las mismas pruebas antes del build.
++
++Los ensayos DOM usan React y LinkeDOM con respuestas API simuladas. No equivalen a pruebas visuales en navegador ni a levantar Docker. Esas verificaciones no están ejecutadas en este entorno y se detallan arriba para realizarlas localmente. No se modifican backend ni esquema.
+diff --git a/docs/contexto/009_sesion_y_secciones.md b/docs/contexto/009_sesion_y_secciones.md
+new file mode 100644
+index 0000000..119f9c9
+--- /dev/null
++++ b/docs/contexto/009_sesion_y_secciones.md
+@@ -0,0 +1,5 @@
++# Sesión y navegación de tickets — 29/10/2026
++
++El usuario reportó pérdida de sesión al recargar y presentó cuatro capturas con una ficha larga: proceso, acciones, conversación, relaciones y bitácora apilados. El frontend solo guardaba la sesión en useState. Se mantiene la autenticación local JWT/jti de 15 minutos y se agrega persistencia de la credencial temporal por pestaña con sessionStorage, comprobando identidad y roles mediante /auth/me antes de restaurar. Logout/401 eliminan la credencial; fallos de conexión permiten reintentar. No se almacenan contraseñas ni roles cacheados.
++
++La ficha se divide en secciones conservando los controles del servidor. El agente abre Atención con responsable visible y toma accesible; se deshabilita tomar casos ya asignados. El solicitante mantiene solo resumen, conversación y seguimiento. Componentes ocultos permanecen montados para conservar campos al navegar entre secciones. Se comprueban nueve pruebas unitarias y DOM; build correcto. No se afirma ejecución Docker ni inspección visual real.
+diff --git a/docs/evidencias/build-secciones-sesion.txt b/docs/evidencias/build-secciones-sesion.txt
+new file mode 100644
+index 0000000..ab0ed22
+--- /dev/null
++++ b/docs/evidencias/build-secciones-sesion.txt
+@@ -0,0 +1,14 @@
++npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
++
++> catalogo-ti-frontend@0.3.0 build
++> vite build
++
++vite v7.3.6 building client environment for production...
++transforming...
++✓ 34 modules transformed.
++rendering chunks...
++computing gzip size...
++dist/index.html                   0.38 kB │ gzip:  0.28 kB
++dist/assets/index-CVM1UwaS.css    6.52 kB │ gzip:  2.16 kB
++dist/assets/index-Bu1KHzUA.js   241.49 kB │ gzip: 74.39 kB
++✓ built in 741ms
+diff --git a/docs/evidencias/sesion-recarga.txt b/docs/evidencias/sesion-recarga.txt
+new file mode 100644
+index 0000000..b823d50
+--- /dev/null
++++ b/docs/evidencias/sesion-recarga.txt
+@@ -0,0 +1,22 @@
++npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
++
++> catalogo-ti-frontend@0.3.0 test
++> node --test tests/*.test.js
++
++✔ recarga: restaura credencial y obtiene usuario y roles actuales del servidor (1.76526ms)
++✔ credencial vencida: no consulta API ni restaura acceso (0.208043ms)
++✔ sesión revocada/desactivada: 401 elimina la credencial (0.25244ms)
++✔ fallo de red no elimina sesión válida; reintento la recupera (0.63039ms)
++✔ error 503 no se confunde con cierre de sesión (0.273593ms)
++✔ cierre de sesión impide restaurar; respuesta antigua no borra otra sesión (0.236507ms)
++✔ datos corruptos o incompletos se descartan sin romper la página (0.26528ms)
++✔ almacenamiento bloqueado permite usar la sesión en memoria (0.366352ms)
++✔ interacciones de sesión y secciones en DOM (260.401412ms)
++ℹ tests 9
++ℹ suites 0
++ℹ pass 9
++ℹ fail 0
++ℹ cancelled 0
++ℹ skipped 0
++ℹ todo 0
++ℹ duration_ms 370.301525
+diff --git a/frontend/Dockerfile b/frontend/Dockerfile
+index 78a597e..1f6209f 100644
+--- a/frontend/Dockerfile
++++ b/frontend/Dockerfile
+@@ -3,7 +3,7 @@ WORKDIR /app
+ COPY frontend/package*.json ./
+ RUN npm ci
+ COPY frontend/ ./
+-RUN npm run build
++RUN npm test && npm run build
+ 
+ FROM nginx:1.28.2-alpine
+ COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+diff --git a/frontend/package-lock.json b/frontend/package-lock.json
+index 985daa5..a221c20 100644
+--- a/frontend/package-lock.json
++++ b/frontend/package-lock.json
+@@ -13,9 +13,18 @@
+       },
+       "devDependencies": {
+         "@vitejs/plugin-react": "5.0.2",
++        "esbuild": "0.28.2",
++        "linkedom": "0.18.14",
+         "vite": "7.3.6"
+       }
+     },
++    "node_modules/@acemir/cssom": {
++      "version": "0.9.32",
++      "resolved": "https://registry.npmjs.org/@acemir/cssom/-/cssom-0.9.32.tgz",
++      "integrity": "sha512-OijrAUu7rrJhSIoHNg6LMPS5e344nwUHA+1EFYYjrh64D+GmytUsfBQjci45TjT+rd5Spsp8B5xsZDT+TgyXXQ==",
++      "dev": true,
++      "license": "MIT"
++    },
+     "node_modules/@babel/code-frame": {
+       "version": "7.29.7",
+       "resolved": "https://registry.npmjs.org/@babel/code-frame/-/code-frame-7.29.7.tgz",
+@@ -1250,6 +1259,20 @@
+         "node": ">=6.0.0"
+       }
+     },
++    "node_modules/boolbase": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/boolbase/-/boolbase-2.0.0.tgz",
++      "integrity": "sha512-DkVaaQHymRhpYEYo9x1oo7Q7B0Y6KJUsjm3c9eTyFDby4MHLBTwZ6ZDWBel5zrYxj1WsZgC5oLpiz+93MluXeA==",
++      "dev": true,
++      "license": "ISC",
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/fb55"
++      }
++    },
+     "node_modules/browserslist": {
+       "version": "4.29.3",
+       "resolved": "https://registry.npmjs.org/browserslist/-/browserslist-4.29.3.tgz",
+@@ -1312,6 +1335,41 @@
+       "dev": true,
+       "license": "MIT"
+     },
++    "node_modules/css-select": {
++      "version": "7.0.0",
++      "resolved": "https://registry.npmjs.org/css-select/-/css-select-7.0.0.tgz",
++      "integrity": "sha512-snmjEVXy+1LnwXdxhYvTMj1d9tOh4HxkA1YmoayVBeeyR2C14Pum7fcxJIm4SswYspVy866eYNwlH6xC3/VH5g==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "dependencies": {
++        "boolbase": "^2.0.0",
++        "css-what": "^8.0.0",
++        "domhandler": "^6.0.1",
++        "domutils": "^4.0.2",
++        "nth-check": "^3.0.1"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/fb55"
++      }
++    },
++    "node_modules/css-what": {
++      "version": "8.0.0",
++      "resolved": "https://registry.npmjs.org/css-what/-/css-what-8.0.0.tgz",
++      "integrity": "sha512-DH0Bqq3DNp5tdOReuNyAA+Ev4Y2GS5FMbZpeTLP6C4CDi0h5nL0BmUPChXw3o/qbHLDWHl49sbNqQVY7bMSDdw==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/sponsors/fb55"
++      }
++    },
+     "node_modules/debug": {
+       "version": "4.4.3",
+       "resolved": "https://registry.npmjs.org/debug/-/debug-4.4.3.tgz",
+@@ -1330,6 +1388,77 @@
+         }
+       }
+     },
++    "node_modules/dom-serializer": {
++      "version": "3.1.1",
++      "resolved": "https://registry.npmjs.org/dom-serializer/-/dom-serializer-3.1.1.tgz",
++      "integrity": "sha512-4MEa38/QexBob6gFNwu+EGdWvhJ1OKuNwdYY3Y3NyeWDQfnGeDYQUDfIRzWu5B5gsv03so2Uxd28YC6zrsx3Lw==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "domelementtype": "^3.0.0",
++        "domhandler": "^6.0.0",
++        "entities": "^8.0.0"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/cheeriojs/dom-serializer?sponsor=1"
++      }
++    },
++    "node_modules/domelementtype": {
++      "version": "3.0.0",
++      "resolved": "https://registry.npmjs.org/domelementtype/-/domelementtype-3.0.0.tgz",
++      "integrity": "sha512-umCQid3jKbDmVjx8jGaW7uUykm4DEUeyV21hPxNMo2nV955DhUThwqyOIDtreepP31hl84X7G5U9ZfsWvIB3Pg==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fb55"
++        }
++      ],
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=20.19.0"
++      }
++    },
++    "node_modules/domhandler": {
++      "version": "6.0.1",
++      "resolved": "https://registry.npmjs.org/domhandler/-/domhandler-6.0.1.tgz",
++      "integrity": "sha512-gYzvtM72ZtxQO0T048kd6HWSbbGCNOUwcnfQ01cqIJ4X2IYKFFHZ5mKvrQETcFXxsRObZulDaKmy//R7TPtsBg==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "dependencies": {
++        "domelementtype": "^3.0.0"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/fb55/domhandler?sponsor=1"
++      }
++    },
++    "node_modules/domutils": {
++      "version": "4.0.2",
++      "resolved": "https://registry.npmjs.org/domutils/-/domutils-4.0.2.tgz",
++      "integrity": "sha512-qI4JLRKnSzqFqr7hAlS5xQDusBCjKSEG4t4+7aNrIQMHBcsC2TGEhuyABJdYkgSewL57PNLYEiibY2iPKhKpaA==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "dependencies": {
++        "dom-serializer": "^3.0.0",
++        "domelementtype": "^3.0.0",
++        "domhandler": "^6.0.0"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/fb55/domutils?sponsor=1"
++      }
++    },
+     "node_modules/electron-to-chromium": {
+       "version": "1.5.444",
+       "resolved": "https://registry.npmjs.org/electron-to-chromium/-/electron-to-chromium-1.5.444.tgz",
+@@ -1337,6 +1466,19 @@
+       "dev": true,
+       "license": "ISC"
+     },
++    "node_modules/entities": {
++      "version": "8.1.0",
++      "resolved": "https://registry.npmjs.org/entities/-/entities-8.1.0.tgz",
++      "integrity": "sha512-kxL7msIffSuh9aaFAMD7rxAIuTRMAHMeBtgHW2yUdWw732ZNh4MehkF2gdjvtdmikkaIP9bFDDJOPlsvm7avrA==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/entities?sponsor=1"
++      }
++    },
+     "node_modules/esbuild": {
+       "version": "0.28.2",
+       "resolved": "https://registry.npmjs.org/esbuild/-/esbuild-0.28.2.tgz",
+@@ -1432,6 +1574,118 @@
+         "node": ">=6.9.0"
+       }
+     },
++    "node_modules/html-escaper": {
++      "version": "3.0.3",
++      "resolved": "https://registry.npmjs.org/html-escaper/-/html-escaper-3.0.3.tgz",
++      "integrity": "sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ==",
++      "dev": true,
++      "license": "MIT"
++    },
++    "node_modules/htmlparser2": {
++      "version": "10.1.0",
++      "resolved": "https://registry.npmjs.org/htmlparser2/-/htmlparser2-10.1.0.tgz",
++      "integrity": "sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==",
++      "dev": true,
++      "funding": [
++        "https://github.com/fb55/htmlparser2?sponsor=1",
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fb55"
++        }
++      ],
++      "license": "MIT",
++      "dependencies": {
++        "domelementtype": "^2.3.0",
++        "domhandler": "^5.0.3",
++        "domutils": "^3.2.2",
++        "entities": "^7.0.1"
++      }
++    },
++    "node_modules/htmlparser2/node_modules/dom-serializer": {
++      "version": "2.0.0",
++      "resolved": "https://registry.npmjs.org/dom-serializer/-/dom-serializer-2.0.0.tgz",
++      "integrity": "sha512-wIkAryiqt/nV5EQKqQpo3SToSOV9J0DnbJqwK7Wv/Trc92zIAYZ4FlMu+JPFW1DfGFt81ZTCGgDEabffXeLyJg==",
++      "dev": true,
++      "license": "MIT",
++      "dependencies": {
++        "domelementtype": "^2.3.0",
++        "domhandler": "^5.0.2",
++        "entities": "^4.2.0"
++      },
++      "funding": {
++        "url": "https://github.com/cheeriojs/dom-serializer?sponsor=1"
++      }
++    },
++    "node_modules/htmlparser2/node_modules/dom-serializer/node_modules/entities": {
++      "version": "4.5.0",
++      "resolved": "https://registry.npmjs.org/entities/-/entities-4.5.0.tgz",
++      "integrity": "sha512-V0hjH4dGPh9Ao5p0MoRY6BVqtwCjhz6vI5LT8AJ55H+4g9/4vbHx1I54fS0XuclLhDHArPQCiMjDxjaL8fPxhw==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=0.12"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/entities?sponsor=1"
++      }
++    },
++    "node_modules/htmlparser2/node_modules/domelementtype": {
++      "version": "2.3.0",
++      "resolved": "https://registry.npmjs.org/domelementtype/-/domelementtype-2.3.0.tgz",
++      "integrity": "sha512-OLETBj6w0OsagBwdXnPdN0cnMfF9opN69co+7ZrbfPGrdpPVNBUj02spi6B1N7wChLQiPn4CSH/zJvXw56gmHw==",
++      "dev": true,
++      "funding": [
++        {
++          "type": "github",
++          "url": "https://github.com/sponsors/fb55"
++        }
++      ],
++      "license": "BSD-2-Clause"
++    },
++    "node_modules/htmlparser2/node_modules/domhandler": {
++      "version": "5.0.3",
++      "resolved": "https://registry.npmjs.org/domhandler/-/domhandler-5.0.3.tgz",
++      "integrity": "sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "dependencies": {
++        "domelementtype": "^2.3.0"
++      },
++      "engines": {
++        "node": ">= 4"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/domhandler?sponsor=1"
++      }
++    },
++    "node_modules/htmlparser2/node_modules/domutils": {
++      "version": "3.2.2",
++      "resolved": "https://registry.npmjs.org/domutils/-/domutils-3.2.2.tgz",
++      "integrity": "sha512-6kZKyUajlDuqlHKVX1w7gyslj9MPIXzIFiz/rGu35uC1wMi+kMhQwGhl4lt9unC9Vb9INnY9Z3/ZA3+FhASLaw==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "dependencies": {
++        "dom-serializer": "^2.0.0",
++        "domelementtype": "^2.3.0",
++        "domhandler": "^5.0.3"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/domutils?sponsor=1"
++      }
++    },
++    "node_modules/htmlparser2/node_modules/entities": {
++      "version": "7.0.1",
++      "resolved": "https://registry.npmjs.org/entities/-/entities-7.0.1.tgz",
++      "integrity": "sha512-TWrgLOFUQTH994YUyl1yT4uyavY5nNB5muff+RtWaqNVCAK408b5ZnnbNAUEWLTCpum9w6arT70i1XdQ4UeOPA==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "engines": {
++        "node": ">=0.12"
++      },
++      "funding": {
++        "url": "https://github.com/fb55/entities?sponsor=1"
++      }
++    },
+     "node_modules/js-tokens": {
+       "version": "4.0.0",
+       "resolved": "https://registry.npmjs.org/js-tokens/-/js-tokens-4.0.0.tgz",
+@@ -1465,6 +1719,31 @@
+         "node": ">=6"
+       }
+     },
++    "node_modules/linkedom": {
++      "version": "0.18.14",
++      "resolved": "https://registry.npmjs.org/linkedom/-/linkedom-0.18.14.tgz",
++      "integrity": "sha512-BRUnkOm4YR5vo+qI3j0EbungB0vZPSCue5AdnTQRaxAGSbsOZiBFRO0rh4zlo8qXUhli8pxvnpEXDklMnlq2Rg==",
++      "dev": true,
++      "license": "ISC",
++      "dependencies": {
++        "@acemir/cssom": "^0.9.32",
++        "css-select": "^7.0.0",
++        "html-escaper": "^3.0.3",
++        "htmlparser2": "^10.1.0",
++        "uhyphen": "^0.2.0"
++      },
++      "engines": {
++        "node": ">=16"
++      },
++      "peerDependencies": {
++        "canvas": ">= 2"
++      },
++      "peerDependenciesMeta": {
++        "canvas": {
++          "optional": true
++        }
++      }
++    },
+     "node_modules/lru-cache": {
+       "version": "5.1.1",
+       "resolved": "https://registry.npmjs.org/lru-cache/-/lru-cache-5.1.1.tgz",
+@@ -1511,6 +1790,23 @@
+         "node": ">=18"
+       }
+     },
++    "node_modules/nth-check": {
++      "version": "3.0.1",
++      "resolved": "https://registry.npmjs.org/nth-check/-/nth-check-3.0.1.tgz",
++      "integrity": "sha512-GX0gsdbGVCgnRgbeGaubfjpBXyYRWOOCVeYh08bSQvDZqxz5ndXs1OTfAt/h36G1xvI94YIspsI0sVFqAV9+RQ==",
++      "dev": true,
++      "license": "BSD-2-Clause",
++      "dependencies": {
++        "boolbase": "^2.0.0"
++      },
++      "engines": {
++        "node": ">=20.19.0"
++      },
++      "funding": {
++        "type": "github",
++        "url": "https://github.com/fb55/nth-check?sponsor=1"
++      }
++    },
+     "node_modules/picocolors": {
+       "version": "1.1.1",
+       "resolved": "https://registry.npmjs.org/picocolors/-/picocolors-1.1.1.tgz",
+@@ -1680,6 +1976,13 @@
+         "url": "https://github.com/sponsors/SuperchupuDev"
+       }
+     },
++    "node_modules/uhyphen": {
++      "version": "0.2.0",
++      "resolved": "https://registry.npmjs.org/uhyphen/-/uhyphen-0.2.0.tgz",
++      "integrity": "sha512-qz3o9CHXmJJPGBdqzab7qAYuW8kQGKNEuoHFYrBwV6hWIMcpAmxDLXojcHfFr9US1Pe6zUswEIJIbLI610fuqA==",
++      "dev": true,
++      "license": "ISC"
++    },
+     "node_modules/update-browserslist-db": {
+       "version": "1.3.3",
+       "resolved": "https://registry.npmjs.org/update-browserslist-db/-/update-browserslist-db-1.3.3.tgz",
+diff --git a/frontend/package.json b/frontend/package.json
+index 54a4cd5..d4f14ea 100644
+--- a/frontend/package.json
++++ b/frontend/package.json
+@@ -4,7 +4,8 @@
+   "private": true,
+   "type": "module",
+   "scripts": {
+-    "build": "vite build"
++    "build": "vite build",
++    "test": "node --test tests/*.test.js"
+   },
+   "dependencies": {
+     "react": "19.1.1",
+@@ -12,6 +13,8 @@
+   },
+   "devDependencies": {
+     "@vitejs/plugin-react": "5.0.2",
++    "esbuild": "0.28.2",
++    "linkedom": "0.18.14",
+     "vite": "7.3.6"
+   }
+ }
+diff --git a/frontend/src/Desk.jsx b/frontend/src/Desk.jsx
+index d50006d..9440256 100644
+--- a/frontend/src/Desk.jsx
++++ b/frontend/src/Desk.jsx
+@@ -1,3 +1,4 @@
++import TicketWorkspace from './TicketWorkspace';
+ import TicketPanel from './TicketPanel';
+ import React,{useState,useEffect} from 'react';
+ const labels={nuevos:'Nuevos servicios',cambios:'Cambios',incidentes:'Incidentes',eventos:'Eventos',problemas:'Problemas',accesos:'Accesos',servicios:'Servicios de tecnología'};
+@@ -47,13 +48,22 @@ export default function Desk({request,session}){
+  {view==='tickets'?<><label>Proceso<select value={filters.proceso||''} onChange={e=>filter('proceso',e.target.value)}><option value="">Todos</option>{Object.entries(labels).map(([k,v])=><option value={k} key={k}>{v}</option>)}</select></label>{!portal&&<><label>Cola<select value={filters.cola_id||''} onChange={e=>filter('cola_id',e.target.value)}><option value="">Todas</option>{options(boot.colas)}</select></label></>}<label>Servicio<select value={filters.servicio_id||''} onChange={e=>filter('servicio_id',e.target.value)}><option value="">Todos</option>{options(boot.servicios)}</select></label><label>Estado<input value={filters.estado||''} placeholder="registrado, cerrado…" onChange={e=>filter('estado',e.target.value)}/></label><label>Prioridad<select value={filters.prioridad||''} onChange={e=>filter('prioridad',e.target.value)}><option value="">Todas</option><option value="1">Alta</option><option value="2">Media</option><option value="3">Baja</option></select></label>{!portal&&<><label>Responsable<select value={filters.responsable_id||''} onChange={e=>filter('responsable_id',e.target.value)}><option value="">Todos</option>{options(boot.usuarios)}</select></label></>}<label>Desde<input type="date" value={filters.desde||''} onChange={e=>filter('desde',e.target.value)}/></label><label>Hasta<input type="date" value={filters.hasta||''} onChange={e=>filter('hasta',e.target.value?e.target.value+'T23:59:59':'')}/></label></>:<><label>Clasificación<select value={filters.clase_id||''} onChange={e=>filter('clase_id',e.target.value)}><option value="">Todas</option>{options(boot.clases)}</select></label><label>Ubicación<select value={filters.ubicacion_id||''} onChange={e=>filter('ubicacion_id',e.target.value)}><option value="">Todas</option>{options(boot.ubicaciones)}</select></label><label>Estado<input value={filters.estado||''} onChange={e=>filter('estado',e.target.value)}/></label><label>Responsable<select value={filters.responsable_id||''} onChange={e=>filter('responsable_id',e.target.value)}><option value="">Todos</option>{options(boot.usuarios)}</select></label></>}
+  </div><div className="table-wrap"><table><thead><tr><th>{view==='ci'?'Código':'Ticket'}</th><th>{view==='ci'?'Nombre':'Título'}</th><th>{view==='ci'?'Clasificación':portal?'Proceso':'Proceso / cola'}</th><th>Estado</th><th>Responsable</th><th>Detalle</th></tr></thead><tbody>{data.items.map(x=><tr key={x.id}><td>{view==='ci'?x.codigo:'#'+x.id}</td><td>{view==='ci'?x.nombre:x.titulo}</td><td>{view==='ci'?x.clase:labels[x.proceso]+(portal?'':' / '+x.cola)}</td><td><span className="badge">{x.estado}</span></td><td>{x.responsable||'Sin asignar'}</td><td><button className="secondary" onClick={()=>run(()=>open(x.id))}>Abrir</button></td></tr>)}</tbody></table></div><div className="toolbar"><button disabled={page===1} onClick={()=>setPage(p=>p-1)}>Anterior</button><span>Página {page} · {data.total} registros</span><button disabled={page*20>=data.total} onClick={()=>setPage(p=>p+1)}>Siguiente</button></div></section>}
+  {form?.kind==='ticket'&&<TicketPanel title="Nueva solicitud" onClose={closeTicket} busy={busy} error={error}><form onSubmit={e=>{e.preventDefault();run(async()=>{const {kind,...payload}=form;const t=await send('/tickets',{...payload,solicitante_id:payload.solicitante_id||undefined,detalle:details});setForm(null);await open(t.id);});}}><div className="edit">{inp('Título','titulo','text',true)}{pick('Servicio N2 de referencia','servicio_id',boot.servicios.filter(s=>s.activo!==false),true)}<label>Descripción<textarea required value={form.descripcion} onChange={e=>update('descripcion',e.target.value)}/></label><label>{portal?'Tipo de solicitud':'Cola / proceso'}<select required value={form.cola_id} onChange={e=>{update('cola_id',e.target.value);const p=boot.colas.find(c=>String(c.id)===e.target.value)?.proceso;setDetails(p==='incidentes'?{categoria:'I0',afectacion:'sin_interrupcion',redundancia:true}:p==='eventos'?{categoria:'E0'}:p==='accesos'?{beneficiario_id:session.user.id,operacion:'provision'}:{});if(p==='incidentes')update('prioridad',3);}}><option value="">Seleccionar</option>{options(boot.colas.filter(c=>c.activo))}</select></label>{(admin||worker)&&pick('Solicitante (vacío: yo)','solicitante_id',boot.usuarios)}<label>Prioridad<select value={form.prioridad} onChange={e=>update('prioridad',Number(e.target.value))}><option value="1">Alta</option><option value="2">Media</option><option value="3">Baja</option></select></label>{['impacto','urgencia','canal'].map(k=><label key={k}>{k}<select value={form[k]} onChange={e=>update(k,e.target.value)}>{(k==='impacto'?['bajo','medio','alto']:k==='urgencia'?['baja','media','alta']:['web','telefono','correo','monitoreo']).map(v=><option key={v}>{v}</option>)}</select></label>)}<label>Buscar dispositivos<input value={ciSearch} onChange={e=>setCiSearch(e.target.value)}/></label><label>CI afectados (Ctrl para varios)<select multiple value={form.ci_ids} onChange={e=>update('ci_ids',Array.from(e.target.selectedOptions,x=>x.value))}>{options(ciOptions)}</select></label>{!form.ci_ids.length&&inp('Justificación sin CI','sin_ci_motivo','text',true)}</div>{selectedProcess&&processFields(selectedProcess,details,setDetails)}<div className="toolbar"><button disabled={busy}>Crear ticket</button><button type="button" className="secondary" onClick={()=>setForm(null)}>Cancelar</button></div></form></TicketPanel>}
+- {selected&&view==='tickets'&&<TicketPanel title={portal?`Seguimiento del ticket #${selected.id}`:`Atender ticket #${selected.id}`} onClose={closeTicket} busy={busy} error={error}><div className="toolbar"><h2>Ticket #{selected.id} · {selected.titulo}</h2><span className="badge">{selected.estado}</span><button className="secondary" onClick={()=>setSelected(null)}>Cerrar ficha</button></div><p>{selected.descripcion}</p><dl><dt>Servicio</dt><dd>{selected.servicio.codigo} · {selected.servicio.nombre} / {selected.servicio.nivel1}</dd><dt>Proceso</dt><dd>{labels[selected.proceso]}</dd><dt>Creado</dt><dd>{date(selected.creado_en)}</dd><dt>Resuelto / cerrado</dt><dd>{date(selected.resuelto_en)} / {date(selected.cerrado_en)}</dd><dt>Resolución</dt><dd>{selected.resolucion||'Pendiente'}</dd><dt>Dispositivos</dt><dd>{selected.ci.map(c=>c.codigo+' '+c.nombre).join(', ')||selected.sin_ci_motivo}</dd></dl>
+- {(worker||approver)&&<><h3>Datos del proceso</h3>{processFields(selected.proceso,details,setDetails)}{worker&&<button disabled={busy} onClick={()=>run(async()=>{await send(`/tickets/${selected.id}`,{detalle:details},'PATCH');await open(selected.id);})}>Guardar datos del proceso</button>}<div className="edit"><label>Motivo / evaluación<textarea value={reason} onChange={e=>setReason(e.target.value)}/></label><label>Resolución<textarea value={resolution} onChange={e=>setResolution(e.target.value)}/></label></div><div className="toolbar">{worker&&<button disabled={busy} onClick={()=>action('tomar')}>Tomar ticket</button>}{selected.transiciones.map((s,i)=>{const next=selected.transiciones[selected.transiciones.indexOf(selected.estado)+1];return s===next&&((s==='aprobado'?approver:worker))?<button key={s} disabled={busy} onClick={()=>action('transicion',s)}>Avanzar a {s}</button>:null;})}{approver&&['analisis','evaluacion','validacion_solicitud'].includes(selected.estado)&&['nuevos','cambios','accesos'].includes(selected.proceso)&&<button className="danger" disabled={busy} onClick={()=>action('transicion','rechazado')}>Rechazar</button>}{worker&&<><button className="secondary" disabled={busy} onClick={()=>action(selected.estado==='pausado'?'retomar':'pausar')}>{selected.estado==='pausado'?'Retomar':'Pausar'}</button></>}</div>{worker&&<div className="edit"><label>Cola destino<select value={target} onChange={e=>setTarget(e.target.value)}><option value="">Seleccionar</option>{options(boot.colas.filter(c=>c.activo&&c.proceso===selected.proceso))}</select></label><label>Agente destino (opcional)<select value={agent} onChange={e=>setAgent(e.target.value)}><option value="">Sin asignar</option>{options(boot.usuarios)}</select></label><div className="toolbar"><button disabled={busy} onClick={()=>action('asignar')}>Asignar agente</button><button disabled={busy} onClick={()=>action('transferir')}>Transferir</button><button disabled={busy} onClick={()=>action('escalar')}>Escalar</button></div></div>}</>}
+- {selected.estado==='cerrado'&&(requester||worker)&&<div className="toolbar"><input placeholder="Motivo de reapertura" value={reason} onChange={e=>setReason(e.target.value)}/><button onClick={()=>action('reabrir')}>Reabrir</button></div>}
+- <h3>Conversación</h3>{selected.comentarios.map(c=><article className="comment" key={c.id}><strong>{c.actor} {c.interno?'· Nota interna':''}</strong><small>{date(c.fecha)}</small><p>{c.texto}</p></article>)}{(requester||worker||approver)&&<><textarea placeholder="Escribir comentario" value={note} onChange={e=>setNote(e.target.value)}/>{worker&&<label><input type="checkbox" checked={internal} onChange={e=>setInternal(e.target.checked)}/>Nota o adjunto interno</label>}<button disabled={busy} onClick={()=>run(async()=>{await send(`/tickets/${selected.id}/comentarios`,{texto:note,interno:internal});setNote('');await open(selected.id);})}>Publicar comentario</button><label>Adjuntar PDF, PNG, JPEG o TXT · máximo 2 MiB<input type="file" accept=".pdf,.png,.jpg,.jpeg,.txt" onChange={e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>2097152){setError('Máximo 2 MiB');return;}run(async()=>{const bytes=new Uint8Array(await f.arrayBuffer());let raw='';for(let i=0;i<bytes.length;i++)raw+=String.fromCharCode(bytes[i]);await send(`/tickets/${selected.id}/adjuntos`,{nombre:f.name,mime:f.type||'text/plain',base64:btoa(raw),interno:internal});await open(selected.id);});}}/></label></>}
+- <ul>{selected.adjuntos.map(a=><li key={a.id}><button className="secondary" onClick={()=>run(async()=>{const res=await fetch('/api/desk/adjuntos/'+a.id,{headers:{Authorization:'Bearer '+session.access_token}});if(!res.ok)throw new Error('Descarga no autorizada');const url=URL.createObjectURL(await res.blob());const el=document.createElement('a');el.href=url;el.download=a.nombre;el.click();setTimeout(()=>URL.revokeObjectURL(url),1000);})}>{a.nombre}</button></li>)}</ul>
+- {!portal&&<h3>Tickets relacionados</h3>}{selected.relaciones.map((r,i)=><p key={i}>#{r.origen_id} · {r.tipo} · #{r.destino_id}</p>)}{worker&&<div className="toolbar"><input placeholder="ID ticket destino" value={linkId} onChange={e=>setLinkId(e.target.value)}/><select value={relation} onChange={e=>setRelation(e.target.value)}>{['relacionado','causa','corrige','duplicado'].map(v=><option key={v}>{v}</option>)}</select><button onClick={()=>run(async()=>{await send(`/tickets/${selected.id}/relaciones`,{destino_id:linkId,tipo:relation});await open(selected.id);})}>Vincular</button></div>}
+- {selected.notificaciones.map(n=><p className="notice" key={n.id}>{n.mensaje} · {date(n.fecha)}</p>)}<h3>{portal?'Seguimiento de la solicitud':'Bitácora de acciones'}</h3><table><thead><tr><th>Fecha</th><th>Actor</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>{selected.bitacora.map(b=><tr key={b.id}><td>{date(b.fecha)}</td><td>{b.actor}</td><td>{b.accion}</td><td>{b.anterior?.estado||'—'} → {b.nuevo?.estado||'—'} {b.motivo}{!portal&&<details><summary>Valores anteriores y nuevos</summary><pre>{JSON.stringify({anterior:b.anterior,nuevo:b.nuevo},null,2)}</pre></details>}</td></tr>)}</tbody></table></TicketPanel>}
++ {selected&&view==='tickets'&&<TicketPanel title={portal?`Seguimiento del ticket #${selected.id}`:`Atender ticket #${selected.id}`} onClose={closeTicket} busy={busy} error={error}>
++ <div className="ticket-overview"><div className="toolbar"><h2>#{selected.id} · {selected.titulo}</h2><span className="badge">{selected.estado}</span></div>
++ <p>{labels[selected.proceso]}{!portal&&<> · {boot.colas.find(c=>String(c.id)===String(selected.cola_id))?.nombre||'Cola actual'}</>}</p>
++ {!portal&&<p><strong>Responsable:</strong> {boot.usuarios.find(u=>String(u.id)===String(selected.responsable_id))?.nombre||(selected.responsable_id?'Asignado':'Sin asignar')}</p>}</div>
++ <TicketWorkspace ticketId={selected.id} initial={worker||approver?'atencion':'resumen'} sections={[
++ {id:'resumen',label:'Resumen',content:<><p>{selected.descripcion}</p><dl><dt>Servicio</dt><dd>{selected.servicio.codigo} · {selected.servicio.nombre} / {selected.servicio.nivel1}</dd><dt>Proceso</dt><dd>{labels[selected.proceso]}</dd><dt>Creado</dt><dd>{date(selected.creado_en)}</dd><dt>Resuelto / cerrado</dt><dd>{date(selected.resuelto_en)} / {date(selected.cerrado_en)}</dd><dt>Resolución</dt><dd>{selected.resolucion||'Pendiente'}</dd><dt>Dispositivos</dt><dd>{selected.ci.map(c=>c.codigo+' '+c.nombre).join(', ')||selected.sin_ci_motivo}</dd></dl> {selected.estado==='cerrado'&&(requester||worker)&&<div className="toolbar"><input placeholder="Motivo de reapertura" value={reason} onChange={e=>setReason(e.target.value)}/><button onClick={()=>action('reabrir')}>Reabrir</button></div>}</>},
++ ...((worker||approver)?[
++ {id:'atencion',label:'Atención',content:<> {selected.estado==='cerrado'&&(requester||worker)&&<div className="toolbar"><input placeholder="Motivo de reapertura" value={reason} onChange={e=>setReason(e.target.value)}/><button onClick={()=>action('reabrir')}>Reabrir</button></div>}{worker&&<div className="toolbar ticket-primary-actions"><button disabled={busy||!!selected.responsable_id||['cerrado','rechazado','pausado'].includes(selected.estado)} onClick={()=>action('tomar')}>{selected.responsable_id?'Ticket asignado':'Tomar ticket'}</button><span>{selected.responsable_id?'Revisa el responsable en la cabecera.':'Tómalo para registrarte como responsable.'}</span></div>}<p className="ticket-help">Completa los campos técnicos en «Datos del proceso» antes de avanzar cuando la etapa lo requiera.</p><div className="edit"><label>Motivo / evaluación<textarea value={reason} onChange={e=>setReason(e.target.value)}/></label><label>Resolución<textarea value={resolution} onChange={e=>setResolution(e.target.value)}/></label></div><div className="toolbar">{selected.transiciones.map((s,i)=>{const next=selected.transiciones[selected.transiciones.indexOf(selected.estado)+1];return s===next&&((s==='aprobado'?approver:worker))?<button key={s} disabled={busy} onClick={()=>action('transicion',s)}>Avanzar a {s}</button>:null;})}{approver&&['analisis','evaluacion','validacion_solicitud'].includes(selected.estado)&&['nuevos','cambios','accesos'].includes(selected.proceso)&&<button className="danger" disabled={busy} onClick={()=>action('transicion','rechazado')}>Rechazar</button>}{worker&&<><button className="secondary" disabled={busy} onClick={()=>action(selected.estado==='pausado'?'retomar':'pausar')}>{selected.estado==='pausado'?'Retomar':'Pausar'}</button></>}</div>{worker&&<details className="ticket-transfer"><summary>Asignación, transferencia y escalamiento</summary><p>Para transferir o escalar, indica el motivo en el campo de evaluación.</p><div className="edit"><label>Cola destino<select value={target} onChange={e=>setTarget(e.target.value)}><option value="">Seleccionar</option>{options(boot.colas.filter(c=>c.activo&&c.proceso===selected.proceso))}</select></label><label>Agente destino (opcional)<select value={agent} onChange={e=>setAgent(e.target.value)}><option value="">Sin asignar</option>{options(boot.usuarios)}</select></label><div className="toolbar"><button disabled={busy} onClick={()=>action('asignar')}>Asignar agente</button><button disabled={busy} onClick={()=>action('transferir')}>Transferir</button><button disabled={busy} onClick={()=>action('escalar')}>Escalar</button></div></div></details>}</>},
++ {id:'proceso',label:'Datos del proceso',content:<>{processFields(selected.proceso,details,setDetails)}{worker&&<button disabled={busy} onClick={()=>run(async()=>{await send(`/tickets/${selected.id}`,{detalle:details},'PATCH');await open(selected.id);})}>Guardar datos del proceso</button>}</>}
++ ]:[]),
++ {id:'conversacion',label:`Conversación (${selected.comentarios.length})`,content:<>{selected.comentarios.map(c=><article className="comment" key={c.id}><strong>{c.actor} {c.interno?'· Nota interna':''}</strong><small>{date(c.fecha)}</small><p>{c.texto}</p></article>)}{(requester||worker||approver)&&<><textarea aria-label="Comentario" placeholder="Escribir comentario" value={note} onChange={e=>setNote(e.target.value)}/>{worker&&<label className="inline"><input type="checkbox" checked={internal} onChange={e=>setInternal(e.target.checked)}/>Nota o adjunto interno</label>}<button disabled={busy} onClick={()=>run(async()=>{await send(`/tickets/${selected.id}/comentarios`,{texto:note,interno:internal});setNote('');await open(selected.id);})}>Publicar comentario</button><label>Adjuntar PDF, PNG, JPEG o TXT · máximo 2 MiB<input type="file" accept=".pdf,.png,.jpg,.jpeg,.txt" onChange={e=>{const f=e.target.files?.[0];if(!f)return;if(f.size>2097152){setError('Máximo 2 MiB');return;}run(async()=>{const bytes=new Uint8Array(await f.arrayBuffer());let raw='';for(let i=0;i<bytes.length;i++)raw+=String.fromCharCode(bytes[i]);await send(`/tickets/${selected.id}/adjuntos`,{nombre:f.name,mime:f.type||'text/plain',base64:btoa(raw),interno:internal});await open(selected.id);});}}/></label></>}
++ <ul>{selected.adjuntos.map(a=><li key={a.id}><button className="secondary" onClick={()=>run(async()=>{const res=await fetch('/api/desk/adjuntos/'+a.id,{headers:{Authorization:'Bearer '+session.access_token}});if(!res.ok)throw new Error('Descarga no autorizada');const url=URL.createObjectURL(await res.blob());const el=document.createElement('a');el.href=url;el.download=a.nombre;el.click();setTimeout(()=>URL.revokeObjectURL(url),1000);})}>{a.nombre}</button></li>)}</ul></>},
++ ...(!portal?[{id:'relaciones',label:'Relaciones',content:<> {selected.relaciones.map((r,i)=><p key={i}>#{r.origen_id} · {r.tipo} · #{r.destino_id}</p>)}{worker&&<div className="toolbar"><input placeholder="ID ticket destino" value={linkId} onChange={e=>setLinkId(e.target.value)}/><select value={relation} onChange={e=>setRelation(e.target.value)}>{['relacionado','causa','corrige','duplicado'].map(v=><option key={v}>{v}</option>)}</select><button onClick={()=>run(async()=>{await send(`/tickets/${selected.id}/relaciones`,{destino_id:linkId,tipo:relation});await open(selected.id);})}>Vincular</button></div>}</>}]:[]),
++ {id:'historial',label:portal?'Seguimiento':'Historial',content:<> {selected.notificaciones.map(n=><p className="notice" key={n.id}>{n.mensaje} · {date(n.fecha)}</p>)}<div className="table-wrap"><table><thead><tr><th>Fecha</th><th>Actor</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>{selected.bitacora.map(b=><tr key={b.id}><td>{date(b.fecha)}</td><td>{b.actor}</td><td>{b.accion}</td><td>{b.anterior?.estado||'—'} → {b.nuevo?.estado||'—'} {b.motivo}{!portal&&<details><summary>Valores anteriores y nuevos</summary><pre>{JSON.stringify({anterior:b.anterior,nuevo:b.nuevo},null,2)}</pre></details>}</td></tr>)}</tbody></table></div></>}
++ ]}/>
++ </TicketPanel>}
+  {form?.kind==='ci'&&<section><h2>{form.id?'Editar':'Crear'} elemento de configuración</h2><form onSubmit={e=>{e.preventDefault();run(async()=>{const payload={};for(const k of ['codigo','nombre','clase_id','ubicacion_id','responsable_id','estado','activo','es_dispositivo','servicio_ids'])payload[k]=form[k];payload.atributos=JSON.parse(form.atributosTexto);await send('/ci'+(form.id?'/'+form.id:''),payload,form.id?'PATCH':'POST');setForm(null);});}}><div className="edit">{inp('Código único','codigo','text',true)}{inp('Nombre','nombre','text',true)}{pick('Clasificación','clase_id',boot.clases.filter(c=>c.activo),true)}{pick('Ubicación','ubicacion_id',boot.ubicaciones.filter(c=>c.activo),true)}{pick('Responsable','responsable_id',boot.usuarios,true)}{inp('Estado operativo','estado','text',true)}<label>Disponible<select value={String(form.activo)} onChange={e=>update('activo',e.target.value==='true')}><option value="true">Sí</option><option value="false">No / baja lógica</option></select></label><label>Es dispositivo físico<select value={String(form.es_dispositivo)} onChange={e=>update('es_dispositivo',e.target.value==='true')}><option value="true">Sí</option><option value="false">No</option></select></label><label>Servicios asociados<select multiple value={form.servicio_ids} onChange={e=>update('servicio_ids',Array.from(e.target.selectedOptions,x=>x.value))}>{options(boot.servicios)}</select></label></div><label>Atributos técnicos por clase (objeto JSON; conserve las claves originales)<textarea className="json-editor" value={form.atributosTexto} onChange={e=>update('atributosTexto',e.target.value)}/></label><button disabled={busy}>Guardar CI</button><button type="button" className="secondary" onClick={()=>setForm(null)}>Cancelar</button></form></section>}
+  {selected&&view==='ci'&&<section><div className="toolbar"><h2>#{selected.id} · {selected.codigo} · {selected.nombre}</h2>{admin&&<button onClick={()=>newCi(selected)}>Editar CI</button>}<button className="secondary" onClick={()=>setSelected(null)}>Cerrar ficha</button></div><p>Clasificación: {selected.clasificacion.map(c=>c.nombre).join(' / ')}</p><dl>{Object.entries(selected.atributos).map(([k,v])=><React.Fragment key={k}><dt>{k}</dt><dd>{typeof v==='object'?JSON.stringify(v):String(v??'Sin información')}</dd></React.Fragment>)}</dl><h3>Relaciones técnicas navegables</h3>{selected.relaciones.map((r,i)=><div className="toolbar" key={i}><button className="secondary" onClick={()=>run(()=>open(r.origen_id))}>{r.origen}</button><span>{r.tipo}</span><button className="secondary" onClick={()=>run(()=>open(r.destino_id))}>{r.destino}</button></div>)}{admin&&<div className="toolbar"><input placeholder="ID CI destino" value={linkId} onChange={e=>setLinkId(e.target.value)}/><select value={relation} onChange={e=>setRelation(e.target.value)}><option value="relacionado" disabled>Seleccionar relación</option>{['depende_de','alojado_en','conectado_a'].map(v=><option key={v}>{v}</option>)}</select><button onClick={()=>run(async()=>{await send(`/ci/${selected.id}/relaciones`,{destino_id:linkId,tipo:relation});await open(selected.id);})}>Crear relación</button></div>}<h3>Servicios asociados</h3>{selected.servicios.map(s=><p key={s.id}>{s.codigo} · {s.nombre}</p>)}<h3>Recorrido de dependencias</h3><p>Estos CI dependen directa o indirectamente del seleccionado. Las relaciones indican impacto potencial, no una interrupción confirmada.</p><div className="toolbar">{selected.dependencias.map(c=><button key={c.id} className="secondary" onClick={()=>run(()=>open(c.id))}>{c.codigo} · {c.nombre}</button>)}</div><h3>Servicios potencialmente afectados</h3>{selected.servicios_potencialmente_afectados.map(s=><p key={s.id}>{s.codigo} · {s.nombre}</p>)}<h3>Historial de tickets</h3>{selected.tickets.map(t=><p key={t.id}>#{t.id} · {t.titulo} · {t.estado}</p>)}<h3>Cambios del CI</h3>{selected.historial.map(h=><p key={h.id}>{date(h.fecha)} · Actor #{h.actor_id} · {h.accion}</p>)}{selected.fuente&&<details><summary>Trazabilidad del Excel original</summary><pre>{JSON.stringify(selected.fuente,null,2)}</pre></details>}</section>}
+  {view==='indicadores'&&stats&&<section><h2>Indicadores de atención</h2><div className="kpis"><article><strong>{stats.total}</strong><span>Tickets visibles</span></article><article><strong>{stats.cmdb.reduce((s,c)=>s+c.dispositivos,0)}</strong><span>Dispositivos persistidos</span></article><article><strong>{stats.tickets.filter(t=>t.objetivo_resolucion==='vencido_abierto').length}</strong><span>Abiertos fuera de objetivo</span></article></div><p>{stats.reloj}</p><p>Reapertura: conserva creación y primera atención, elimina resolución/cierre vigentes y mantiene los ciclos anteriores en bitácora. Un objetivo pendiente no se cuenta como cumplido.</p><table><thead><tr><th>Cola</th><th>Proceso</th><th>Prioridad</th><th>Estado</th><th>Total</th></tr></thead><tbody>{stats.grupos.map((g,i)=><tr key={i}><td>{g.cola}</td><td>{labels[g.proceso]}</td><td>{g.prioridad}</td><td>{g.estado}</td><td>{g.total}</td></tr>)}</tbody></table><h3>Tiempos observados por ticket · minutos</h3><div className="table-wrap"><table><thead><tr><th>Ticket</th><th>Antigüedad</th><th>Primera atención</th><th>Resolución / transcurrido</th><th>Objetivo primera</th><th>Objetivo resolución</th></tr></thead><tbody>{stats.tickets.map(t=><tr key={t.id}><td>#{t.id}</td><td>{Number(t.antiguedad_min).toFixed(1)}</td><td>{t.primera_min_real===null?'Pendiente':Number(t.primera_min_real).toFixed(1)}</td><td>{Number(t.resolucion_min_real).toFixed(1)}</td><td>{t.objetivo_primera}</td><td>{t.objetivo_resolucion}</td></tr>)}</tbody></table></div><h3>Distribución de dispositivos</h3>{stats.cmdb.map(c=><p key={c.codigo}>{c.nombre}: {c.dispositivos}</p>)}</section>}
+diff --git a/frontend/src/TicketWorkspace.jsx b/frontend/src/TicketWorkspace.jsx
+new file mode 100644
+index 0000000..0167e29
+--- /dev/null
++++ b/frontend/src/TicketWorkspace.jsx
+@@ -0,0 +1,16 @@
++import React,{useEffect,useState} from 'react';
++/** Cambiar de sección conserva los campos pendientes de guardar. */
++export default function TicketWorkspace({ticketId,initial='resumen',sections}){
++ const [active,setActive]=useState(initial);
++ useEffect(()=>{setActive(initial);},[ticketId,initial]);
++ return <div className="ticket-workspace">
++  <nav className="ticket-sections" aria-label="Secciones del ticket">
++   {sections.map(section=><button type="button" key={section.id} aria-pressed={active===section.id}
++    aria-controls={`ticket-section-${section.id}`} className={active===section.id?'selected':'secondary'}
++    onClick={e=>{setActive(section.id);e.currentTarget.closest('.ticket-panel-body')?.scrollTo?.({top:0});}}>{section.label}</button>)}
++  </nav>
++  {sections.map(section=><div key={section.id} id={`ticket-section-${section.id}`} hidden={active!==section.id} className="ticket-section">
++   <h3>{section.label}</h3>{section.content}
++  </div>)}
++ </div>;
++}
+diff --git a/frontend/src/main.jsx b/frontend/src/main.jsx
+index d5c4acd..6178e2f 100644
+--- a/frontend/src/main.jsx
++++ b/frontend/src/main.jsx
+@@ -1,3 +1,4 @@
++import useSession from './useSession';
+ import Desk from './Desk';
+ import React,{useCallback,useEffect,useState} from 'react';
+ import {createRoot} from 'react-dom/client';
+@@ -5,7 +6,8 @@ import {resources} from './resources';
+ import './style.css';
+ const status=v=>v==null?'Desconocido':v?'Activo':'Inactivo';
+ function App(){
+- const [session,setSession]=useState(null),[identifier,setIdentifier]=useState(''),[password,setPassword]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
++ const {session,restoring,restoreError,retry,loginSession,invalidate}=useSession();
++ const [identifier,setIdentifier]=useState(''),[password,setPassword]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
+  const [resource,setResource]=useState('servicios-nivel2'),[result,setResult]=useState({items:[],total:0}),[filters,setFilters]=useState({}),[page,setPage]=useState(1),[lookups,setLookups]=useState({}),[form,setForm]=useState(null),[detail,setDetail]=useState(null),[report,setReport]=useState(null),[refresh,setRefresh]=useState(0);
+  const admin=session?.user.rol==='administrador';
+  const [deskView,setDeskView]=useState(true);
+@@ -14,8 +16,8 @@ function App(){
+  const roleLabel=effectiveRoles.filter(r=>r!=='consulta'||effectiveRoles.length===1).map(r=>r?r[0].toUpperCase()+r.slice(1):'').join(' · ');
+  const request=useCallback(async(path,options={},token=session?.access_token)=>{
+   const res=await fetch(`/api${path}`,{...options,headers:{'Content-Type':'application/json',...(token?{Authorization:`Bearer ${token}`}:{})}});
+-  const data=res.status===204?null:await res.json();if(!res.ok){if(res.status===401&&token)setSession(null);throw new Error(Array.isArray(data?.message)?data.message.join(', '):data?.message||'Solicitud rechazada');}return data;
+- },[session]);
++  const data=res.status===204?null:await res.json();if(!res.ok){if(res.status===401&&token)invalidate(token);throw new Error(Array.isArray(data?.message)?data.message.join(', '):data?.message||'Solicitud rechazada');}return data;
++ },[session,invalidate]);
+  useEffect(()=>{if(!session||portal||deskView)return;let cancelled=false;
+   const q=new URLSearchParams({pagina:String(page),limite:'20',...Object.fromEntries(Object.entries(filters).filter(([,v])=>v!==''))});
+   request(`/${resource}?${q}`).then(r=>{if(!cancelled)setResult(r);}).catch(e=>{if(!cancelled)setMessage(e.message);});return()=>{cancelled=true;};
+@@ -24,7 +26,7 @@ function App(){
+   async function load(){const sources=Object.keys(resources).filter(k=>k!=='servicios-nivel2'&&(admin||k!=='usuarios'));const entries=await Promise.all(sources.map(async key=>{let items=[],pagina=1,total;do{const r=await request(`/${key}?limite=100&pagina=${pagina++}`);items.push(...r.items);total=r.total;}while(items.length<total);return[key,items];}));if(!cancelled)setLookups(Object.fromEntries(entries));}
+   load().catch(e=>{if(!cancelled)setMessage(e.message);});return()=>{cancelled=true;};
+  },[session,admin,refresh,request,portal,deskView]);
+- async function login(e){e.preventDefault();setBusy(true);setMessage('');try{setSession(await request('/auth/login',{method:'POST',body:JSON.stringify({identifier,password})},null));setPassword('');}catch(e){setMessage(e.message);}finally{setBusy(false);}}
++ async function login(e){e.preventDefault();setBusy(true);setMessage('');try{loginSession(await request('/auth/login',{method:'POST',body:JSON.stringify({identifier,password})},null));setPassword('');}catch(e){setMessage(e.message);}finally{setBusy(false);}}
+  async function action(fn){setBusy(true);setMessage('');try{await fn();setRefresh(n=>n+1);}catch(e){setMessage(e.message);}finally{setBusy(false);}}
+  function navigate(key){setResource(key);setFilters({});setPage(1);setForm(null);setDetail(null);setReport(null);setMessage('');}
+  function openForm(item){const record=item||{};const value={};for(const f of resources[resource].fields){value[f.key]=f.type==='password'?'':record[f.key]??(f.type==='boolean'?(f.nullable?'':f.key==='requiere_revision'?false:true):'');}
+@@ -42,8 +44,8 @@ function App(){
+   return <input type={f.type} value={v} onChange={change} required={!f.nullable&&f.type!=='password'||f.type==='password'&&!form.id} autoComplete={f.type==='password'?'new-password':undefined}/>;
+  }
+  const labelRef=(key,id)=>lookups[key]?.find(x=>x.id===id)?.nombre||id||'Sin información';
+- return <main><header><p className="eyebrow">GESTIÓN DE SERVICIOS TI</p><h1>{portal?'Portal del solicitante':'Catálogo de servicios'}</h1>{session&&<div className="toolbar"><span>{session.user.nombre} · {roleLabel}</span><button className="secondary" disabled={busy} onClick={()=>action(async()=>{await request('/auth/logout',{method:'POST'});setSession(null);setForm(null);})}>Cerrar sesión</button></div>}</header>
+- {!session?<form className="login" onSubmit={login}><h2>Iniciar sesión</h2><label>Usuario o correo<input required autoComplete="username" value={identifier} onChange={e=>setIdentifier(e.target.value)}/></label><label>Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label><button disabled={busy}>Ingresar</button></form>:<>
++ return <main><header><p className="eyebrow">GESTIÓN DE SERVICIOS TI</p><h1>{portal?'Portal del solicitante':'Catálogo de servicios'}</h1>{session&&<div className="toolbar"><span>{session.user.nombre} · {roleLabel}</span><button className="secondary" disabled={busy} onClick={()=>action(async()=>{await request('/auth/logout',{method:'POST'});invalidate(session.access_token);setForm(null);})}>Cerrar sesión</button></div>}</header>
++ {restoring?<p role="status">Restaurando sesión…</p>:restoreError?<section><p role="alert">{restoreError}</p><button onClick={retry}>Reintentar</button></section>:!session?<form className="login" onSubmit={login}><h2>Iniciar sesión</h2><label>Usuario o correo<input required autoComplete="username" value={identifier} onChange={e=>setIdentifier(e.target.value)}/></label><label>Contraseña<input required type="password" autoComplete="current-password" value={password} onChange={e=>setPassword(e.target.value)}/></label><button disabled={busy}>Ingresar</button></form>:<>
+  <div className="toolbar"><button onClick={()=>setDeskView(true)}>Service Desk</button>{!portal&&<button className="secondary" onClick={()=>setDeskView(false)}>Catálogo y organización</button>}</div>
+  {(deskView||portal)?<Desk request={request} session={session}/>:<>
+  <nav aria-label="Módulos">{Object.entries(resources).filter(([,r])=>!r.admin||admin).map(([key,r])=><button className={resource===key?'selected':'secondary'} key={key} onClick={()=>navigate(key)}>{r.label}</button>)}</nav>
+diff --git a/frontend/src/session.js b/frontend/src/session.js
+new file mode 100644
+index 0000000..ba6dc86
+--- /dev/null
++++ b/frontend/src/session.js
+@@ -0,0 +1,31 @@
++// Solo la credencial temporal, por pestaña. Nunca guardar contraseña ni confiar en roles cacheados.
++const KEY = 'catalogo.session.v1';
++export function readSession(storage, now = Date.now()) {
++ try {
++  const saved = JSON.parse(storage.getItem(KEY) || 'null');
++  if (saved && typeof saved.access_token === 'string' && Number.isFinite(saved.expiresAt) && saved.expiresAt > now) return saved;
++  storage.removeItem(KEY);
++ } catch { try { storage.removeItem(KEY); } catch {} }
++ return null;
++}
++export function rememberSession(storage, session, now = Date.now()) {
++ const saved = {access_token: session.access_token, expiresAt: now + session.expires_in * 1000};
++ try { storage.setItem(KEY, JSON.stringify(saved)); } catch { /* Almacenamiento bloqueado: sesión solo en memoria. */ }
++ return saved;
++}
++export function forgetSession(storage, token) {
++ try {
++  const saved = JSON.parse(storage.getItem(KEY) || 'null');
++  if (!token || saved?.access_token === token) storage.removeItem(KEY);
++ } catch { try { storage.removeItem(KEY); } catch {} }
++}
++export async function restoreSession(storage, fetcher, now = Date.now()) {
++ const saved = readSession(storage, now);
++ if (!saved) return null;
++ const response = await fetcher('/api/auth/me', {headers: {Authorization: `Bearer ${saved.access_token}`}});
++ if (response.status === 401) { forgetSession(storage, saved.access_token); return null; }
++ if (!response.ok) throw new Error('No se pudo validar la sesión. Intenta nuevamente.');
++ const user = await response.json();
++ if (saved.expiresAt <= Date.now()) { forgetSession(storage, saved.access_token); return null; }
++ return {...saved, user};
++}
+diff --git a/frontend/src/style.css b/frontend/src/style.css
+index 20a893d..cfb079d 100644
+--- a/frontend/src/style.css
++++ b/frontend/src/style.css
+@@ -7,3 +7,25 @@
+ .ticket-panel-header h2{font-size:1.25rem;margin:4px 0}.ticket-panel-header .eyebrow{margin:0}.ticket-panel-body{padding:24px}.ticket-panel-body>.toolbar{flex-wrap:wrap}.ticket-panel-body .edit{grid-template-columns:repeat(2,minmax(0,1fr))}.ticket-panel-body textarea{width:100%;box-sizing:border-box}.ticket-panel-body .table-wrap{overflow-x:auto}.ticket-panel-body table{font-size:.85rem}.ticket-panel-body label{min-width:0}.ticket-panel-body input,.ticket-panel-body select{max-width:100%;box-sizing:border-box}.ticket-panel-body .error{position:sticky;top:0;z-index:1}
+ @keyframes ticket-panel-in{from{transform:translateX(30px);opacity:.6}to{transform:translateX(0);opacity:1}}
+ @media(prefers-reduced-motion:reduce){.ticket-panel{animation:none}}@media(max-width:620px){.ticket-panel{width:100vw;max-width:100vw}.ticket-panel-body{padding:16px}.ticket-panel-body .edit{grid-template-columns:1fr}}
++/* Ficha por secciones: una tarea visible, borradores conservados al navegar. */
++.ticket-panel-header{margin-bottom:0}
++.ticket-overview{padding-bottom:16px;border-bottom:1px solid #dce7eb}
++.ticket-overview h2{margin:0;font-size:1.15rem;overflow-wrap:anywhere}
++.ticket-overview p{margin:8px 0 0;font-size:14px;color:#496578}
++.ticket-sections{position:sticky;top:0;z-index:1;background:#fff;padding:14px 0;border-bottom:1px solid #dce7eb;gap:6px}
++.ticket-sections button{padding:9px 12px}
++.ticket-sections button[aria-pressed=true]{background:#185997;color:#fff;box-shadow:inset 0 -3px #0b354f}
++.ticket-section[hidden]{display:none}
++.ticket-section>h3{margin:20px 0 14px}
++.ticket-primary-actions{background:#edf6f7;border:1px solid #cee1e5;border-radius:8px;padding:12px;margin-bottom:16px;font-size:13px}
++.ticket-transfer{margin:20px 0;border:1px solid #dae3ef;border-radius:8px;padding:14px}
++.ticket-transfer>summary{cursor:pointer;font-weight:600}
++.ticket-section>.toolbar,.ticket-section>label{margin:14px 0}
++.ticket-section .inline{flex-direction:row;justify-content:flex-start}
++.ticket-section .inline input{margin:0}
++.ticket-section table td{vertical-align:top}
++.ticket-section pre{white-space:pre-wrap;overflow-wrap:anywhere}
++.ticket-sections button:focus-visible{outline:3px solid #429cbd;outline-offset:2px}
++.ticket-panel[open]{display:flex;flex-direction:column;overflow:hidden}
++.ticket-panel-header{position:relative;flex-shrink:0}
++.ticket-panel-body{flex:1;min-height:0;overflow-y:auto}
+diff --git a/frontend/src/useSession.jsx b/frontend/src/useSession.jsx
+new file mode 100644
+index 0000000..d2eddb1
+--- /dev/null
++++ b/frontend/src/useSession.jsx
+@@ -0,0 +1,32 @@
++import {useCallback, useEffect, useState} from 'react';
++import {forgetSession, rememberSession, restoreSession} from './session';
++export default function useSession() {
++ const [session, setSession] = useState(null), [restoring, setRestoring] = useState(true);
++ const [restoreError, setRestoreError] = useState(''), [attempt, setAttempt] = useState(0);
++ // Acceso diferido: algunos navegadores pueden bloquear sessionStorage.
++ const storage = {getItem: key => window.sessionStorage.getItem(key), setItem: (key, value) => window.sessionStorage.setItem(key, value), removeItem: key => window.sessionStorage.removeItem(key)};
++ useEffect(() => {
++  let cancelled = false;
++  setRestoring(true); setRestoreError('');
++  restoreSession(storage, window.fetch.bind(window)).then(saved => {
++   if (!cancelled) {setSession(saved); setRestoring(false);}
++  }).catch(() => {
++   if (!cancelled) {setRestoreError('No se pudo comprobar la sesión. Revisa la conexión y vuelve a intentar.'); setRestoring(false);}
++  });
++  return () => {cancelled = true;};
++ }, [attempt]);
++ const invalidate = useCallback(token => {
++  forgetSession(storage, token);
++  setSession(current => !token || current?.access_token === token ? null : current);
++ }, []);
++ const loginSession = useCallback(result => {
++  const saved = rememberSession(storage, result);
++  setSession({...saved, user: result.user}); setRestoreError('');
++ }, []);
++ useEffect(() => {
++  if (!session) return;
++  const timer = setTimeout(() => invalidate(session.access_token), Math.max(0, session.expiresAt - Date.now()));
++  return () => clearTimeout(timer);
++ }, [session, invalidate]);
++ return {session, restoring, restoreError, retry: () => setAttempt(n => n + 1), loginSession, invalidate};
++}
+diff --git a/frontend/tests/session.test.js b/frontend/tests/session.test.js
+new file mode 100644
+index 0000000..bd1611f
+--- /dev/null
++++ b/frontend/tests/session.test.js
+@@ -0,0 +1,56 @@
++import {test} from 'node:test';
++import assert from 'node:assert/strict';
++import {rememberSession,readSession,restoreSession,forgetSession} from '../src/session.js';
++const memory=()=>{const values=new Map();return {getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k),values};};
++const login={access_token:'temporary-demo-token',expires_in:900,user:{id:'2',rol:'consulta',roles:['solicitante']},password:'never-store-this'};
++test('recarga: restaura credencial y obtiene usuario y roles actuales del servidor',async()=>{
++ const storage=memory();rememberSession(storage,login);
++ const currentUser={id:'2',roles:['agente']};
++ const restored=await restoreSession(storage,async(url,options)=>{
++  assert.equal(url,'/api/auth/me');assert.equal(options.headers.Authorization,'Bearer '+login.access_token);
++  return {ok:true,status:200,json:async()=>currentUser};
++ });
++ assert.equal(restored.access_token,login.access_token);assert.deepEqual(restored.user,currentUser);
++ const stored=Array.from(storage.values.values()).join('');
++ assert.ok(!stored.includes('never-store-this'));assert.ok(!stored.includes('solicitante'));
++});
++test('credencial vencida: no consulta API ni restaura acceso',async()=>{
++ const storage=memory();rememberSession(storage,login,Date.now()-901000);
++ assert.equal(await restoreSession(storage,()=>assert.fail('No consultar con token vencido')),null);
++ assert.equal(storage.values.size,0);
++});
++test('sesión revocada/desactivada: 401 elimina la credencial',async()=>{
++ const storage=memory();rememberSession(storage,login);
++ assert.equal(await restoreSession(storage,async()=>({ok:false,status:401})),null);
++ assert.equal(storage.values.size,0);
++});
++test('fallo de red no elimina sesión válida; reintento la recupera',async()=>{
++ const storage=memory();rememberSession(storage,login);
++ await assert.rejects(restoreSession(storage,async()=>{throw new Error('offline');}));
++ assert.ok(readSession(storage));
++ assert.ok(await restoreSession(storage,async()=>({ok:true,json:async()=>login.user})));
++});
++test('error 503 no se confunde con cierre de sesión',async()=>{
++ const storage=memory();rememberSession(storage,login);
++ await assert.rejects(restoreSession(storage,async()=>({ok:false,status:503})));
++ assert.ok(readSession(storage));
++});
++test('cierre de sesión impide restaurar; respuesta antigua no borra otra sesión',async()=>{
++ const storage=memory();rememberSession(storage,login);
++ forgetSession(storage,'old-token');assert.ok(readSession(storage));
++ forgetSession(storage,login.access_token);
++ assert.equal(await restoreSession(storage,()=>assert.fail()),null);
++});
++test('datos corruptos o incompletos se descartan sin romper la página',()=>{
++ const storage=memory();rememberSession(storage,login);
++ const key=Array.from(storage.values.keys())[0];
++ for(const value of ['{broken','{}','null','{"access_token":"x","expiresAt":"never"}']){
++  storage.setItem(key,value);assert.equal(readSession(storage),null);
++ }
++});
++test('almacenamiento bloqueado permite usar la sesión en memoria',()=>{
++ const storage={getItem(){throw new Error('blocked');},setItem(){throw new Error('blocked');},removeItem(){throw new Error('blocked');}};
++ assert.equal(readSession(storage),null);
++ assert.equal(rememberSession(storage,login).access_token,login.access_token);
++ assert.doesNotThrow(()=>forgetSession(storage));
++});
+diff --git a/frontend/tests/ui-cases.jsx b/frontend/tests/ui-cases.jsx
+new file mode 100644
+index 0000000..8eed1d4
+--- /dev/null
++++ b/frontend/tests/ui-cases.jsx
+@@ -0,0 +1,87 @@
++import assert from 'node:assert/strict';
++import React,{act} from 'react';
++import {createRoot} from 'react-dom/client';
++import {parseHTML} from 'linkedom';
++import useSession from '../src/useSession.jsx';
++import Desk from '../src/Desk.jsx';
++import TicketWorkspace from '../src/TicketWorkspace.jsx';
++export async function verify(){
++ const {window,document}=parseHTML('<html><body><div id="root"></div></body></html>');
++ globalThis.window=window;globalThis.document=document;globalThis.IS_REACT_ACT_ENVIRONMENT=true;
++ const values=new Map();
++ window.sessionStorage={getItem:k=>values.get(k)??null,setItem:(k,v)=>values.set(k,v),removeItem:k=>values.delete(k)};
++ let offline=false,calls=0;
++ window.fetch=async()=>{calls++;if(offline)throw new Error('offline');return {ok:true,status:200,json:async()=>({nombre:'Usuario validado',roles:['agente']})};};
++ let api;
++ function SessionView(){api=useSession();return <p>{api.restoring?'restaurando':api.session?.user.nombre||'sin sesión'}</p>;}
++ let root=createRoot(document.getElementById('root'));
++ await act(async()=>root.render(<SessionView/>));
++ assert.equal(document.querySelector('p').textContent,'sin sesión');
++ await act(async()=>api.loginSession({access_token:'demo',expires_in:900,user:{nombre:'Agente'}}));
++ assert.equal(document.querySelector('p').textContent,'Agente');
++ await act(async()=>root.unmount());
++ root=createRoot(document.getElementById('root'));
++ await act(async()=>root.render(<SessionView/>));
++ assert.equal(document.querySelector('p').textContent,'Usuario validado');assert.equal(calls,1);
++ await act(async()=>root.unmount());
++ offline=true;root=createRoot(document.getElementById('root'));
++ await act(async()=>root.render(<SessionView/>));
++ assert.ok(api.restoreError);assert.equal(values.size,1);
++ offline=false;await act(async()=>api.retry());
++ assert.equal(api.session.user.nombre,'Usuario validado');
++ await act(async()=>api.invalidate('demo'));
++ assert.equal(values.size,0);assert.equal(document.querySelector('p').textContent,'sin sesión');
++ await act(async()=>root.unmount());
++ root=createRoot(document.getElementById('root'));
++ const sections=[{id:'atencion',label:'Atención',content:<button>Tomar ticket</button>},{id:'proceso',label:'Datos del proceso',content:<input defaultValue="Borrador"/>},{id:'historial',label:'Historial',content:<p>Bitácora</p>}];
++ await act(async()=>root.render(<TicketWorkspace ticketId="41" initial="atencion" sections={sections}/>));
++ const buttons=()=>Array.from(document.querySelectorAll('nav button'));
++ assert.equal(buttons()[0].getAttribute('aria-pressed'),'true');
++ assert.equal(document.getElementById('ticket-section-proceso').hidden,true);
++ await act(async()=>buttons()[1].click());
++ const input=document.querySelector('input');input.value='Cambio pendiente';
++ assert.equal(document.getElementById('ticket-section-proceso').hidden,false);
++ await act(async()=>buttons()[2].click());
++ await act(async()=>buttons()[1].click());
++ assert.equal(document.querySelector('input').value,'Cambio pendiente');
++ // Refrescar el mismo ticket conserva la sección; abrir otro vuelve a Atención.
++ await act(async()=>root.render(<TicketWorkspace ticketId="41" initial="atencion" sections={sections}/>));
++ assert.equal(buttons()[1].getAttribute('aria-pressed'),'true');
++ await act(async()=>root.render(<TicketWorkspace ticketId="42" initial="atencion" sections={sections}/>));
++ assert.equal(buttons()[0].getAttribute('aria-pressed'),'true');
++ await act(async()=>root.unmount());
++ // Ficha real: agente toma y ve el responsable; solicitante no recibe secciones operativas.
++ window.HTMLElement.prototype.showModal=function(){this.setAttribute('open','');};
++ window.HTMLElement.prototype.close=function(){this.removeAttribute('open');};
++ const ticket={id:'41',titulo:'Prueba',descripcion:'Incidente',estado:'registrado',proceso:'incidentes',cola_id:'1',responsable_id:null,servicio:{codigo:'SE.01',nombre:'Servicio',nivel1:'Infraestructura'},ci:[],sin_ci_motivo:'Sin equipo',comentarios:[],adjuntos:[],relaciones:[],notificaciones:[],bitacora:[],transiciones:['registrado','clasificacion'],detalle:{categoria:'I2',redundancia:false,afectacion:'degradacion'}};
++ const boot={usuarios:[{id:'3',nombre:'Agente de prueba'}],colas:[{id:'1',nombre:'Nivel 1',proceso:'incidentes',activo:true}],servicios:[],clases:[],ubicaciones:[],incidentes:[{categoria:'I2'}]};
++ const request=async(path,options)=>{
++  if(path==='/desk/bootstrap')return boot;
++  if(path.startsWith('/desk/ci-opciones'))return {items:[]};
++  if(path.startsWith('/desk/tickets?'))return {items:[ticket],total:1};
++  if(path==='/desk/tickets/41/accion'){
++   assert.equal(JSON.parse(options.body).accion,'tomar');ticket.responsable_id='3';return {...ticket};
++  }
++  if(path==='/desk/tickets/41')return {...ticket};
++  throw new Error('Ruta inesperada '+path);
++ };
++ for(const role of ['agente','solicitante']){
++  root=createRoot(document.getElementById('root'));
++  await act(async()=>root.render(<Desk request={request} session={{access_token:'demo',user:{id:'3',rol:'consulta',roles:[role]}}}/>));
++  await act(async()=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Abrir').click());
++  const sectionButtons=Array.from(document.querySelectorAll('.ticket-sections button'));
++  assert.equal(sectionButtons.length,role==='agente'?6:3);
++  if(role==='agente'){
++   assert.equal(sectionButtons[1].getAttribute('aria-pressed'),'true');
++   await act(async()=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Tomar ticket').click());
++   assert.ok(document.querySelector('.ticket-overview').textContent.includes('Agente de prueba'));
++   assert.equal(Array.from(document.querySelectorAll('button')).find(b=>b.textContent==='Ticket asignado').disabled,true);
++  }else{
++   assert.ok(!document.querySelector('#ticket-section-atencion'));
++   assert.ok(!document.querySelector('#ticket-section-proceso'));
++   assert.ok(!document.querySelector('#ticket-section-relaciones'));
++  }
++  await act(async()=>root.unmount());
++ }
++ delete globalThis.window;delete globalThis.document;delete globalThis.IS_REACT_ACT_ENVIRONMENT;
++}
+diff --git a/frontend/tests/ui.test.js b/frontend/tests/ui.test.js
+new file mode 100644
+index 0000000..b9d1432
+--- /dev/null
++++ b/frontend/tests/ui.test.js
+@@ -0,0 +1,15 @@
++import {test} from 'node:test';
++import {build} from 'esbuild';
++import {mkdtemp,rm} from 'node:fs/promises';
++import {pathToFileURL} from 'node:url';
++import {join} from 'node:path';
++// Compilar JSX con el mismo motor del build; ejecutar interacciones DOM sin navegador.
++test('interacciones de sesión y secciones en DOM',async()=>{
++ const directory=await mkdtemp(new URL('./.ui-',import.meta.url));
++ try {
++  const outfile=join(directory,'cases.mjs');
++  await build({entryPoints:[new URL('./ui-cases.jsx',import.meta.url).pathname],outfile,bundle:true,platform:'node',format:'esm',packages:'external',jsx:'automatic',logLevel:'silent'});
++  const {verify}=await import(pathToFileURL(outfile));
++  await verify();
++ } finally {await rm(directory,{recursive:true,force:true});}
++});

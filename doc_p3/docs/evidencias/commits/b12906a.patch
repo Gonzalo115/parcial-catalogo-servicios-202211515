@@ -1,0 +1,296 @@
+commit b12906a174338364cad8e2a61ecafc0edc63ac25
+Author:     Proyecto Service Desk <demo@local.invalid>
+AuthorDate: Wed Oct 28 22:35:44 2026 -0600
+Commit:     Proyecto Service Desk <demo@local.invalid>
+CommitDate: Wed Oct 28 22:35:44 2026 -0600
+
+    fix: corregir carga demo y verificar siete rutas con pruebas aisladas
+
+diff --git a/.env.example b/.env.example
+index 33fb3ea..55aae4a 100644
+--- a/.env.example
++++ b/.env.example
+@@ -6,3 +6,7 @@ BACKEND_PORT=3100
+ FRONTEND_PORT=8080
+ DEMO_ADMIN_PASSWORD=SA_admin_2026
+ DEMO_CONSULTA_PASSWORD=SA_consulta_2026
++
++DEMO_DESK_PASSWORD=SA_desk_2026_demo
++CMDB_SEED=202211515
++CMDB_COUNT=5000
+diff --git a/backend/Dockerfile b/backend/Dockerfile
+index f690235..3ee198d 100644
+--- a/backend/Dockerfile
++++ b/backend/Dockerfile
+@@ -6,15 +6,20 @@ COPY backend/tsconfig.json ./
+ COPY backend/src ./src
+ COPY backend/tests ./tests
+ COPY db/migrations ./migrations
+-COPY data/CatalogoServicios.xlsx ./data/CatalogoServicios.xlsx
+-RUN npm run build && npm run test:embedded
++COPY data ./data
++RUN npm run build && npm run test:embedded && npm run test:desk
++
++FROM build AS verification
++CMD ["sh", "-c", "npm run test:embedded && npm run test:desk"]
++
++FROM build AS production-deps
+ RUN npm prune --omit=dev
+ 
+ FROM node:22.22.0-alpine AS runtime
+ ENV NODE_ENV=production
+ WORKDIR /app
+-COPY --from=build --chown=node:node /app/package*.json ./
+-COPY --from=build --chown=node:node /app/node_modules ./node_modules
++COPY --from=production-deps --chown=node:node /app/package*.json ./
++COPY --from=production-deps --chown=node:node /app/node_modules ./node_modules
+ COPY --from=build --chown=node:node /app/dist ./dist
+ COPY --from=build --chown=node:node /app/migrations ./migrations
+ COPY --from=build --chown=node:node /app/tests ./tests
+diff --git a/backend/tests/desk.test.cjs b/backend/tests/desk.test.cjs
+index 779dbc3..81fda7a 100644
+--- a/backend/tests/desk.test.cjs
++++ b/backend/tests/desk.test.cjs
+@@ -1,12 +1,12 @@
+ require('reflect-metadata');
+-const {test}=require('node:test'),assert=require('node:assert/strict'),{readFileSync,readdirSync}=require('node:fs'),{resolve}=require('node:path'),{performance}=require('node:perf_hooks');
++const {test}=require('node:test'),assert=require('node:assert/strict'),{readFileSync,readdirSync,existsSync}=require('node:fs'),{resolve}=require('node:path'),{performance}=require('node:perf_hooks');
+ const {DataSource}=require('typeorm'),{PGliteDriver}=require('typeorm-pglite'),{Test}=require('@nestjs/testing');
+-process.env.JWT_SECRET='isolated-desk-tests-only-32-byte-secret';process.env.EXCEL_PATH=resolve('../data/CatalogoServicios.xlsx');process.env.CMDB_PATH=resolve('../data/CMDB.xlsx');process.env.DEMO_DESK_PASSWORD='SA_desk_2026_demo';
++process.env.JWT_SECRET='isolated-desk-tests-only-32-byte-secret';const dataRoot=existsSync('data/CatalogoServicios.xlsx')?'data':'../data';const migrations=existsSync('migrations')?'migrations':'../db/migrations';process.env.EXCEL_PATH=resolve(dataRoot+'/CatalogoServicios.xlsx');process.env.CMDB_PATH=resolve(dataRoot+'/CMDB.xlsx');process.env.DEMO_DESK_PASSWORD='SA_desk_2026_demo';
+ const {AppModule}=require('../dist/app.module'),{ENTITIES}=require('../dist/db/entities'),{configureApp}=require('../dist/configure-app'),{DbService}=require('../dist/db/db.service'),{seedDemo}=require('../dist/scripts/demo'),{ImporterService}=require('../dist/importer/importer.service'),{DeskService}=require('../dist/desk/desk.service'),{seedTickets,prepareDesk}=require('../dist/desk/seed'),{FLOWS,incidentCategory}=require('../dist/desk/workflows');
+ test('Service Desk: fuentes originales, API y PostgreSQL aislado',async t=>{
+  const source=new DataSource({type:'postgres',driver:new PGliteDriver().driver,entities:ENTITIES,schema:'catalogo',synchronize:false});let app;
+  try{
+-  await source.initialize();for(const name of readdirSync('../db/migrations').filter(n=>n.endsWith('.sql')).sort())await source.query(readFileSync('../db/migrations/'+name,'utf8'));await source.query('SET search_path=catalogo,public');
++  await source.initialize();for(const name of readdirSync(migrations).filter(n=>n.endsWith('.sql')).sort())await source.query(readFileSync(migrations+'/'+name,'utf8'));await source.query('SET search_path=catalogo,public');
+   const module=await Test.createTestingModule({imports:[AppModule]}).overrideProvider(DataSource).useValue(source).compile();app=module.createNestApplication({logger:false});configureApp(app);await app.listen(0,'127.0.0.1');const db=app.get(DbService),desk=app.get(DeskService),base=(await app.getUrl())+'/api';await seedDemo(db,'SA_admin_2026','SA_consulta_2026');
+   const tokens={};const api=async(path,method='GET',body,who='admin')=>{const r=await fetch(base+path,{method,headers:{'Content-Type':'application/json',...(tokens[who]?{Authorization:'Bearer '+tokens[who]}:{})},...(body===undefined?{}:{body:JSON.stringify(body)})});return {status:r.status,body:r.status===204?null:await r.json()};};
+   const login=async name=>{const r=await api('/auth/login','POST',{identifier:name,password:name==='admin'?'SA_admin_2026':name==='consulta'?'SA_consulta_2026':'SA_desk_2026_demo'},'none');assert.equal(r.status,200,JSON.stringify(r.body));tokens[name]=r.body.access_token;return r.body.user;};await login('admin');await login('consulta');
+diff --git a/docker-compose.yml b/docker-compose.yml
+index d55d679..cd162a2 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -42,6 +42,9 @@ services:
+       JWT_AUDIENCE: catalogo-web
+       DEMO_ADMIN_PASSWORD: ${DEMO_ADMIN_PASSWORD:-}
+       DEMO_CONSULTA_PASSWORD: ${DEMO_CONSULTA_PASSWORD:-}
++      DEMO_DESK_PASSWORD: ${DEMO_DESK_PASSWORD:-SA_desk_2026_demo}
++      CMDB_SEED: ${CMDB_SEED:-202211515}
++      CMDB_COUNT: ${CMDB_COUNT:-5000}
+     ports:
+       - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
+     volumes:
+@@ -80,6 +83,14 @@ services:
+     networks: [catalogo_net]
+     restart: unless-stopped
+ 
++  verificaciones:
++    profiles: [pruebas]
++    build:
++      context: .
++      dockerfile: backend/Dockerfile
++      target: verification
++    network_mode: none
++
+ volumes:
+   postgres_data:
+ 
+diff --git a/docs/contexto/007_pruebas_y_relojes.md b/docs/contexto/007_pruebas_y_relojes.md
+new file mode 100644
+index 0000000..416da93
+--- /dev/null
++++ b/docs/contexto/007_pruebas_y_relojes.md
+@@ -0,0 +1,2 @@
++# Correcciones observadas, concurrencia y relojes
++Las pruebas reales detectaron SQL ambiguo al reutilizar $2 para nombre TEXT y nombre_usuario VARCHAR, y faltaba resultado_validacion al generar un ticket de servicios. Se corrigieron ambos y se repitió la suite. La prueba de dos agentes requiere serializar las transacciones del adaptador embebido; en PostgreSQL también se mantiene bloqueo asesor y UPDATE condicional. El tiempo es calendario 24x7. Resolución descuenta pausas; primera atención mide creación a primer contacto. Reapertura conserva creación/primera atención y limpia resolución/cierre, sin borrar bitácora. P18 requiere Docker real y no puede declararse aprobado con PGlite.
+diff --git a/docs/evidencias/base-ampliada.txt b/docs/evidencias/base-ampliada.txt
+new file mode 100644
+index 0000000..78e4999
+--- /dev/null
++++ b/docs/evidencias/base-ampliada.txt
+@@ -0,0 +1,43 @@
++npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
++
++> catalogo-ti-backend@0.3.0 test:embedded
++> node --test tests/embedded.test.cjs
++
++Cuenta creada: admin
++Cuenta creada: consulta
++Cuenta existente conservada: admin
++Cuenta existente conservada: consulta
++▶ Integración: NestJS, TypeORM y PostgreSQL embebido; archivo original
++  ✔ Seed demo reproducible: dos roles, hashes y sin duplicados (1485.213986ms)
++  ✔ Hash con sal distinta, verificación y límite de 72 bytes (1085.508318ms)
++  ✔ P01: login por usuario/correo y credenciales inválidas (1231.681559ms)
++  ✔ P02: sin token, firma alterada, expiración y usuario desactivado (25.773747ms)
++  ✔ P03: consulta lee, escritura administrativa rechazada (27.657987ms)
++  ✔ P02: logout revoca JWT y bloquea su reutilización (9.885962ms)
++  ✔ P04 parcial: jerarquía completa recuperable en DB (35.191504ms)
++  ✔ P05 parcial: unicidad y FK rechazadas en DB (7.07497ms)
++  ✔ P09 parcial: umbrales inválidos rechazados y NULL conservado (4.820317ms)
++  ✔ P11 parcial: responsabilidad y traslados coherentes en DB (10.339871ms)
++  ✔ P03: consulta rechazada en CRUD e importación reales; hashes no expuestos (37.959701ms)
++  ✔ P04/P05: jerarquía por API, duplicados, FK, actualización y bajas protegidas (635.699952ms)
++  ✔ P09: crear y editar umbrales, NULL y sección obligatoria (106.881818ms)
++  ✔ P10: búsqueda, filtros, paginación y ficha completa (35.289001ms)
++  ✔ P11: usuario ajeno rechazado; asignación, traslado y baja protegidos (121.226211ms)
++  ✔ P06: original, 12/46, hash y auditoría completa (753.409713ms)
++  ✔ P07: repetir sin duplicar ni actualizar, trazabilidad (661.186641ms)
++  ✔ P08: SE.12 canónico, dos nombres, prefijo y NULL reales (30.416818ms)
++  ✔ P10: filtros de clase, criticidad, tipo, estado y nivel1 (45.992641ms)
++Asignaciones de demostración: 3 creadas; asignaciones previas conservadas.
++Asignaciones de demostración: 0 creadas; asignaciones previas conservadas.
++  ✔ Etiquetas: modificación auditada, mapeo e identidad preservada al reimportar (732.415822ms)
++  ✔ Datos demo: al menos tres asignaciones válidas e idempotentes (39.912765ms)
++  ✔ Reimportación conserva correcciones manuales y responsables (929.212422ms)
++✔ Integración: NestJS, TypeORM y PostgreSQL embebido; archivo original (12862.821497ms)
++ℹ tests 23
++ℹ suites 0
++ℹ pass 23
++ℹ fail 0
++ℹ cancelled 0
++ℹ skipped 0
++ℹ todo 0
++ℹ duration_ms 13651.000131
+diff --git a/docs/evidencias/build-frontend-esbuild.txt b/docs/evidencias/build-frontend-esbuild.txt
+new file mode 100644
+index 0000000..806ebf8
+--- /dev/null
++++ b/docs/evidencias/build-frontend-esbuild.txt
+@@ -0,0 +1,7 @@
++npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
++
++> catalogo-ti-frontend@0.3.0 build
++> vite build
++
++vite v7.3.6 building client environment for production...
++transforming...
+diff --git a/docs/evidencias/desk-intento-3.txt b/docs/evidencias/desk-intento-3.txt
+new file mode 100644
+index 0000000..7e7c0b0
+--- /dev/null
++++ b/docs/evidencias/desk-intento-3.txt
+@@ -0,0 +1,100 @@
++npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
++
++> catalogo-ti-backend@0.3.0 test:desk
++> node --test tests/desk.test.cjs
++
++Cuenta creada: admin
++Cuenta creada: consulta
++▶ Service Desk: fuentes originales, API y PostgreSQL aislado
++  ✔ P01: autenticación y consulta sin permisos de escritura (14.794451ms)
++  ✔ P02: catálogo 12/46 repetible con incidencias originales (1163.906499ms)
++{
++  "semilla": "TEST5000",
++  "conjunto": "seed:TEST5000",
++  "conteo_generados": 5000,
++  "por_categoria": [
++    {
++      "codigo": "HW",
++      "cantidad": 1
++    },
++    {
++      "codigo": "SW",
++      "cantidad": 0
++    },
++    {
++      "codigo": "HW-SRV",
++      "cantidad": 1686
++    },
++    {
++      "codigo": "HW-PC",
++      "cantidad": 1613
++    },
++    {
++      "codigo": "HW-NET",
++      "cantidad": 1701
++    }
++  ],
++  "observaciones": [
++    "Jerarquía extendida es decisión del proyecto, pendiente validación docente"
++  ]
++}
++Tickets demo conservados/creados: mínimo 37; no se sobrescriben ediciones de evaluación.
++{
++  "semilla": "TEST5000",
++  "conjunto": "seed:TEST5000",
++  "conteo_generados": 5000,
++  "por_categoria": [
++    {
++      "codigo": "HW",
++      "cantidad": 1
++    },
++    {
++      "codigo": "SW",
++      "cantidad": 0
++    },
++    {
++      "codigo": "HW-SRV",
++      "cantidad": 1686
++    },
++    {
++      "codigo": "HW-PC",
++      "cantidad": 1613
++    },
++    {
++      "codigo": "HW-NET",
++      "cantidad": 1701
++    }
++  ],
++  "observaciones": [
++    "Jerarquía extendida es decisión del proyecto, pendiente validación docente"
++  ]
++}
++Tickets demo conservados/creados: mínimo 37; no se sobrescriben ediciones de evaluación.
++  ✔ P03: 5000 dispositivos, 37 tickets, repetición sin duplicar (2927.755343ms)
++  ✔ P04: clasificación con origen, rechazo de ciclos y padres inexistentes (36.661671ms)
++  ✔ P05: referencias válidas/inválidas, servicio N1 derivado y condición sin CI (43.612745ms)
++  ✔ P06: permiso por usuario, rol y consulta sin elevación (33.598525ms)
++  ✔ P07: dos agentes toman simultáneamente; solo uno obtiene asignación (61.716118ms)
++  ✔ P08: transferencia y escalamiento con motivo y proceso validado (32.562706ms)
++  ✔ P09/P10: siete rutas completas; cambios sin aprobación y autoaprobación rechazados (766.654886ms)
++  ✔ P11: E0–E3 e incidente idempotente al reabrir evento (415.801542ms)
++  ✔ P12: I0–I6 y regla complementaria de duraciones (10.254352ms)
++  ✔ P13: vínculo incidente–problema–cambio recuperable (21.845829ms)
++  ✔ P14: dependencias CI/servicios, ciclos técnicos según tipo (36.860948ms)
++  ✔ P15: cierre sin resolución, reapertura, bitácora y notas internas (65.585401ms)
++  ✔ Adjuntos: firma, límites, descarga autorizada e interna (34.469873ms)
++{"prueba":"P16","entorno":"Node v24.22.1, PGlite WASM, HTTP local","ms":42.37220800000068,"registros":5000}
++  ✔ P16: filtros y paginación de 5000 dispositivos con tiempo observado (42.765696ms)
++  ✔ P17: objetivos con abiertos, primera atención, pausas y reaperturas (29.124046ms)
++  ✔ Bajas protegidas de usuarios y colas con casos abiertos (22.671021ms)
++P18: requiere Docker real; no sustituido por PGlite.
++  ✔ Logout impide reutilización de token (7.857528ms)
++✔ Service Desk: fuentes originales, API y PostgreSQL aislado (10981.417308ms)
++ℹ tests 20
++ℹ suites 0
++ℹ pass 20
++ℹ fail 0
++ℹ cancelled 0
++ℹ skipped 0
++ℹ todo 0
++ℹ duration_ms 11758.383355
+diff --git a/frontend/nginx.conf b/frontend/nginx.conf
+index 9c9e886..0bb390d 100644
+--- a/frontend/nginx.conf
++++ b/frontend/nginx.conf
+@@ -1,6 +1,7 @@
+ server {
+   listen 80;
+   server_name _;
++  client_max_body_size 3m;
+   root /usr/share/nginx/html;
+   index index.html;
+   location = /healthz { access_log off; return 200 'ok'; }
+diff --git a/frontend/vite.config.js b/frontend/vite.config.js
+index bd5899b..1cee4f4 100644
+--- a/frontend/vite.config.js
++++ b/frontend/vite.config.js
+@@ -1,3 +1,3 @@
+ import { defineConfig } from 'vite';
+-import react from '@vitejs/plugin-react';
+-export default defineConfig({ plugins: [react()] });
++// Vite/esbuild compila JSX; no se necesita transformar de nuevo con Babel.
++export default defineConfig({esbuild:{jsx:'automatic'}});

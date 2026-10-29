@@ -1,0 +1,29 @@
+commit d682e9c4a71e355656a9575c2661ce8918bf34c1
+Author:     Proyecto Service Desk <demo@local.invalid>
+AuthorDate: Fri Oct 30 04:20:08 2026 +0900
+Commit:     Proyecto Service Desk <demo@local.invalid>
+CommitDate: Fri Oct 30 04:20:26 2026 +0900
+
+    fix: aislar portal solicitante agregar segunda cuenta y paneles laterales
+
+ GUIA_EJECUCION_Y_PRUEBAS.md              |   2 +
+ README.md                                |   2 +
+ backend/src/auth/portal-policy.ts        |   5 ++
+ backend/src/auth/roles.guard.ts          |   9 +++
+ backend/src/desk/desk.module.ts          |  68 ++++++++++----------
+ backend/src/desk/desk.service.ts         |  49 ++++++++++++---
+ backend/src/desk/seed.ts                 |   4 +-
+ backend/tests/desk.test.cjs              |  30 ++++++++-
+ docs/PARCHE_PORTAL_SOLICITANTE.md        |  62 ++++++++++++++++++
+ docs/PROCESOS.md                         |   2 +
+ docs/PRUEBAS.md                          |   4 ++
+ docs/contexto/008_portal_solicitantes.md |   2 +
+ docs/evidencias/build-portal.txt         |   4 ++
+ docs/evidencias/build-ui-panel.txt       |  14 +++++
+ docs/evidencias/portal-regresion.txt     |  43 +++++++++++++
+ docs/evidencias/portal-seguridad.txt     | 104 +++++++++++++++++++++++++++++++
+ frontend/src/Desk.jsx                    |  27 ++++----
+ frontend/src/TicketPanel.jsx             |  15 +++++
+ frontend/src/main.jsx                    |  17 ++---
+ frontend/src/style.css                   |   7 +++
+ 20 files changed, 405 insertions(+), 65 deletions(-)

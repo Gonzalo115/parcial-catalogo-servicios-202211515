@@ -1,0 +1,8 @@
+6fdfabf2995d7ebb9697fc2f1da9d33bfc45bcbb fix: restore session on reload and organize ticket sections
+d682e9c4a71e355656a9575c2661ce8918bf34c1 fix: aislar portal solicitante agregar segunda cuenta y paneles laterales
+57e63b76e8c31e5ca8ce154e5fd1bf9794ec88be test: registrar validación final y evidencias reproducibles
+46b07e9e7cf75d9351a399dcbf2ecec0645ef6f3 feat: completar demo reproducible guía y documentación de verificación
+b12906a174338364cad8e2a61ecafc0edc63ac25 fix: corregir carga demo y verificar siete rutas con pruebas aisladas
+597dc469c07d9f0fcfba85a0b268296155fe734e feat: integrar tickets procesos permisos CMDB y primeras pruebas
+f189e93315d799151a962f2c92f7a3fa51b9c260 docs: ampliar contexto y modelo para Service Desk
+a819c8e7687403bc250fd6663351f1d160775ed0 chore: conservar base del parcial y fuentes originales

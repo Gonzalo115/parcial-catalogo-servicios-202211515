@@ -1,0 +1,19 @@
+commit b12906a174338364cad8e2a61ecafc0edc63ac25
+Author:     Proyecto Service Desk <demo@local.invalid>
+AuthorDate: Wed Oct 28 22:35:44 2026 -0600
+Commit:     Proyecto Service Desk <demo@local.invalid>
+CommitDate: Wed Oct 28 22:35:44 2026 -0600
+
+    fix: corregir carga demo y verificar siete rutas con pruebas aisladas
+
+ .env.example                               |   4 ++
+ backend/Dockerfile                         |  13 ++--
+ backend/tests/desk.test.cjs                |   6 +-
+ docker-compose.yml                         |  11 ++++
+ docs/contexto/007_pruebas_y_relojes.md     |   2 +
+ docs/evidencias/base-ampliada.txt          |  43 +++++++++++++
+ docs/evidencias/build-frontend-esbuild.txt |   7 ++
+ docs/evidencias/desk-intento-3.txt         | 100 +++++++++++++++++++++++++++++
+ frontend/nginx.conf                        |   1 +
+ frontend/vite.config.js                    |   4 +-
+ 10 files changed, 182 insertions(+), 9 deletions(-)

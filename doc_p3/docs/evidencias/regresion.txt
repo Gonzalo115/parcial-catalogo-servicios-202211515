@@ -1,0 +1,43 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> catalogo-ti-backend@0.3.0 test:embedded
+> node --test tests/embedded.test.cjs
+
+Cuenta creada: admin
+Cuenta creada: consulta
+Cuenta existente conservada: admin
+Cuenta existente conservada: consulta
+▶ Integración: NestJS, TypeORM y PostgreSQL embebido; archivo original
+  ✔ Seed demo reproducible: dos roles, hashes y sin duplicados (1273.625015ms)
+  ✔ Hash con sal distinta, verificación y límite de 72 bytes (939.227866ms)
+  ✔ P01: login por usuario/correo y credenciales inválidas (1033.552684ms)
+  ✔ P02: sin token, firma alterada, expiración y usuario desactivado (24.280222ms)
+  ✔ P03: consulta lee, escritura administrativa rechazada (20.325866ms)
+  ✔ P02: logout revoca JWT y bloquea su reutilización (8.550511ms)
+  ✔ P04 parcial: jerarquía completa recuperable en DB (8.041784ms)
+  ✔ P05 parcial: unicidad y FK rechazadas en DB (2.387279ms)
+  ✔ P09 parcial: umbrales inválidos rechazados y NULL conservado (1.890891ms)
+  ✔ P11 parcial: responsabilidad y traslados coherentes en DB (6.144594ms)
+  ✔ P03: consulta rechazada en CRUD e importación reales; hashes no expuestos (29.537151ms)
+  ✔ P04/P05: jerarquía por API, duplicados, FK, actualización y bajas protegidas (450.884835ms)
+  ✔ P09: crear y editar umbrales, NULL y sección obligatoria (64.683207ms)
+  ✔ P10: búsqueda, filtros, paginación y ficha completa (33.87725ms)
+  ✔ P11: usuario ajeno rechazado; asignación, traslado y baja protegidos (106.271568ms)
+  ✔ P06: original, 12/46, hash y auditoría completa (556.175963ms)
+  ✔ P07: repetir sin duplicar ni actualizar, trazabilidad (351.32766ms)
+  ✔ P08: SE.12 canónico, dos nombres, prefijo y NULL reales (16.034826ms)
+  ✔ P10: filtros de clase, criticidad, tipo, estado y nivel1 (25.302806ms)
+Asignaciones de demostración: 3 creadas; asignaciones previas conservadas.
+Asignaciones de demostración: 0 creadas; asignaciones previas conservadas.
+  ✔ Etiquetas: modificación auditada, mapeo e identidad preservada al reimportar (344.606562ms)
+  ✔ Datos demo: al menos tres asignaciones válidas e idempotentes (12.238952ms)
+  ✔ Reimportación conserva correcciones manuales y responsables (316.330798ms)
+✔ Integración: NestJS, TypeORM y PostgreSQL embebido; archivo original (8875.622656ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9711.232692
